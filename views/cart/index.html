@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Revise sua sacola PetFlow e finalize seu pedido.">
+    <title>PetFlow | Sacola</title>
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+    <link rel="stylesheet" href="/css/layout/public-header.css?v=20260811-1">
+    <link rel="stylesheet" href="/css/pages/public-cart.css">
+</head>
+<body>
+    <header class="cart-topbar">
+        <a class="brand" href="/" aria-label="Voltar para a PetFlow">
+            <img src="/images/logo/fred-petflow-logo-transparent.png" alt="Logo PetFlow">
+            <strong>PetFlow</strong>
+        </a>
+        <nav aria-label="Navegação">
+            <a href="/#products">Produtos</a>
+            <a href="/meus-pedidos">Meus pedidos</a>
+            <a href="/login">Entrar</a>
+        </nav>
+    </header>
+
+    <main class="cart-page">
+        <section class="cart-header" aria-labelledby="cartTitle">
+            <span class="eyebrow">Sacola PetFlow</span>
+            <h1 id="cartTitle">Revise seu pedido</h1>
+            <p>Confira os produtos, ajuste quantidades e finalize usando seus dados salvos.</p>
+        </section>
+
+        <section class="cart-layout">
+            <div class="cart-items" id="cartItems"></div>
+
+            <aside class="cart-summary" aria-labelledby="summaryTitle">
+                <h2 id="summaryTitle">Resumo</h2>
+                <div class="customer-card" id="cartCustomer"></div>
+                <form class="cart-form" id="cartForm">
+                    <label>
+                        Observações
+                        <textarea class="form-control" name="observacoes" placeholder="Ex: entregar à tarde"></textarea>
+                    </label>
+                    <div class="cart-total">
+                        <span>Total</span>
+                        <strong id="cartTotal">R$ 0,00</strong>
+                    </div>
+                    <button class="btn btn-primary" type="submit">Finalizar pedido</button>
+                    <p class="cart-status" id="cartStatus" role="status"></p>
+                </form>
+            </aside>
+        </section>
+    </main>
+
+    <script src="/js/layout/public-header.js?v=20260811-1"></script>
+    <script src="/js/pages/cart/cart.js?v=20260810-1"></script>
+</body>
+</html>

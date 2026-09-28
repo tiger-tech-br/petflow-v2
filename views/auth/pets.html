@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex,nofollow">
+    <title>PetFlow | Meus pets</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+    <link rel="stylesheet" href="/css/layout/public-header.css?v=20260811-1">
+    <link rel="stylesheet" href="/css/pages/public-login.css?v=20260809-1">
+</head>
+<body>
+    <main class="login-container account-container pets-container">
+        <section class="login-card" aria-labelledby="petsTitle">
+            <header class="login-header">
+                <a class="login-logo" href="/" aria-label="Voltar para a página inicial">
+                    <img src="/images/logo/fred-petflow-logo-transparent.png" alt="Logo PetFlow" width="88" height="88">
+                </a>
+                <span class="login-eyebrow">Área do cliente</span>
+                <h1 id="petsTitle">Meus pets</h1>
+                <p>Cadastre os pets que receberão serviços como banho, tosa, vacinação e atendimento veterinário.</p>
+            </header>
+
+            <nav class="account-links" aria-label="Área do cliente">
+                <a href="/conta"><i class="fa-solid fa-user-pen"></i> Minha conta</a>
+                <a class="active" href="/meus-pets"><i class="fa-solid fa-paw"></i> Meus pets</a>
+                <a href="/meus-pedidos"><i class="fa-solid fa-bag-shopping"></i> Meus pedidos</a>
+            </nav>
+
+            <form id="publicPetForm" class="login-form pet-form" autocomplete="off">
+                <input type="hidden" id="petId" name="id">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="petNome">Nome do pet</label>
+                        <input class="form-control" id="petNome" name="nome" placeholder="Ex: Fred" minlength="2" maxlength="100" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="petEspecie">Espécie</label>
+                        <select class="form-control" id="petEspecie" name="especie" required>
+                            <option value="">Selecione</option>
+                            <option value="Cachorro">Cachorro</option>
+                            <option value="Gato">Gato</option>
+                            <option value="Ave">Ave</option>
+                            <option value="Roedor">Roedor</option>
+                            <option value="Peixe">Peixe</option>
+                            <option value="Outro">Outro</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="petRaca">Raça</label>
+                        <input class="form-control" id="petRaca" name="raca" placeholder="Opcional" maxlength="100">
+                    </div>
+                    <div class="form-group">
+                        <label for="petSexo">Sexo</label>
+                        <select class="form-control" id="petSexo" name="sexo">
+                            <option value="">Não informar</option>
+                            <option value="MACHO">Macho</option>
+                            <option value="FEMEA">Fêmea</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="petPorte">Porte</label>
+                        <select class="form-control" id="petPorte" name="porte">
+                            <option value="">Não informar</option>
+                            <option value="PEQUENO">Pequeno</option>
+                            <option value="MEDIO">Médio</option>
+                            <option value="GRANDE">Grande</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="petPeso">Peso</label>
+                        <input class="form-control" id="petPeso" name="peso" type="number" min="0" step="0.1" placeholder="Ex: 8.5">
+                    </div>
+                </div>
+                <div class="form-group pet-observations-field">
+                    <label for="petObservacoes">Observações</label>
+                    <textarea class="form-control" id="petObservacoes" name="observacoes" placeholder="Alergias, comportamento ou cuidados importantes"></textarea>
+                </div>
+                <div class="pet-actions">
+                    <button class="btn btn-primary" type="submit">Salvar pet</button>
+                    <button class="btn btn-secondary btn-clear-pet" id="clearPetForm" type="button">Limpar</button>
+                </div>
+                <p class="login-note" id="petStatus"></p>
+            </form>
+
+            <div class="public-pets-list" id="publicPetsList">
+                <div class="orders-empty">Carregando seus pets...</div>
+            </div>
+        </section>
+    </main>
+
+    <script src="/js/layout/public-header.js?v=20260811-1"></script>
+    <script src="/js/pages/auth/public-pets.js?v=20260804-1"></script>
+</body>
+</html>

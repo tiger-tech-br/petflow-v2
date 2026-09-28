@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Solicite serviços PetFlow para cuidar do seu pet com segurança e carinho.">
+    <title>PetFlow | Serviço</title>
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+    <link rel="stylesheet" href="/css/layout/public-header.css?v=20260811-1">
+    <link rel="stylesheet" href="/css/pages/public-service.css">
+</head>
+<body>
+    <header class="service-topbar">
+        <a class="brand" href="/" aria-label="Voltar para a PetFlow">
+            <img src="/images/logo/fred-petflow-logo-transparent.png" alt="Logo PetFlow">
+            <strong>PetFlow</strong>
+        </a>
+        <nav aria-label="Navegação">
+            <a href="/#services">Serviços</a>
+            <a href="/sacola">Sacola</a>
+            <a href="/conta">Minha conta</a>
+        </nav>
+    </header>
+
+    <main class="service-page" data-service-page>
+        <section class="service-hero">
+            <div class="service-copy">
+                <span class="eyebrow">Serviço PetFlow</span>
+                <h1 id="serviceTitle">Carregando serviço...</h1>
+                <p id="serviceDescription">Buscando informações atualizadas.</p>
+                <div class="service-price">
+                    <span>A partir de</span>
+                    <strong id="servicePrice">R$ 0,00</strong>
+                </div>
+            </div>
+            <img id="serviceImage" src="/images/services/banho-tosa.jpg" alt="Serviço PetFlow" loading="eager">
+        </section>
+
+        <section class="service-content" aria-label="Solicitar serviço">
+            <article class="info-panel">
+                <h2>Como funciona</h2>
+                <ul>
+                    <li><i class="fa-solid fa-check"></i> Você escolhe o serviço, data e horário desejado.</li>
+                    <li><i class="fa-solid fa-check"></i> A equipe PetFlow recebe a solicitação no sistema.</li>
+                    <li><i class="fa-solid fa-check"></i> O horário é confirmado antes do atendimento.</li>
+                </ul>
+            </article>
+
+            <article class="request-panel">
+                <h2>Solicitar atendimento</h2>
+                <p id="serviceLoginNotice" class="notice"></p>
+                <a class="login-cta is-hidden" id="serviceLoginLink" href="/login">
+                    Entrar ou criar cadastro
+                    <i class="fa-solid fa-arrow-right"></i>
+                </a>
+
+                <form id="serviceRequestForm" class="service-form" autocomplete="on">
+                    <input type="hidden" id="serviceId" name="servicoId">
+
+                    <div class="form-group">
+                        <label for="petId">Pet</label>
+                        <select id="petId" name="petId" class="form-control">
+                            <option value="">Cadastrar novo pet</option>
+                        </select>
+                    </div>
+
+                    <div class="new-pet-fields" id="newPetFields">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="petNome">Nome do pet</label>
+                                <input class="form-control" id="petNome" name="petNome" placeholder="Ex: Fred" minlength="2" maxlength="100">
+                            </div>
+                            <div class="form-group">
+                                <label for="petEspecie">Espécie</label>
+                                <select class="form-control" id="petEspecie" name="petEspecie">
+                                    <option value="">Selecione</option>
+                                    <option value="Cachorro">Cachorro</option>
+                                    <option value="Gato">Gato</option>
+                                    <option value="Ave">Ave</option>
+                                    <option value="Roedor">Roedor</option>
+                                    <option value="Peixe">Peixe</option>
+                                    <option value="Outro">Outro</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="petRaca">Raça</label>
+                                <input class="form-control" id="petRaca" name="petRaca" placeholder="Opcional" maxlength="100">
+                            </div>
+                            <div class="form-group">
+                                <label for="petPorte">Porte</label>
+                                <select class="form-control" id="petPorte" name="petPorte">
+                                    <option value="">Não informar</option>
+                                    <option value="PEQUENO">Pequeno</option>
+                                    <option value="MEDIO">Médio</option>
+                                    <option value="GRANDE">Grande</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="serviceDate">Data</label>
+                            <input class="form-control" id="serviceDate" name="data" type="date" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="serviceTime">Horário</label>
+                            <input class="form-control" id="serviceTime" name="hora" type="time" min="08:00" max="18:00" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="serviceNotes">Observações</label>
+                        <textarea class="form-control" id="serviceNotes" name="observacoes" placeholder="Ex: meu pet tem medo de secador" maxlength="300"></textarea>
+                    </div>
+
+                    <button class="btn btn-primary" type="submit">
+                        Enviar solicitação
+                        <i class="fa-solid fa-paper-plane"></i>
+                    </button>
+                    <p class="form-status" id="serviceStatus"></p>
+                </form>
+            </article>
+        </section>
+    </main>
+
+    <script src="/js/layout/public-header.js?v=20260811-1"></script>
+    <script src="/js/pages/services/service-detail.js?v=20260804-1"></script>
+</body>
+</html>

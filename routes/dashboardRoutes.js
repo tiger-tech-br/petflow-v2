@@ -1,0 +1,144 @@
+"use strict";
+
+const express = require("express");
+
+const router = express.Router();
+
+const DashboardController = require("../controllers/dashboardController");
+
+const authMiddleware = require("../middlewares/authMiddleware");
+const roleMiddleware = require("../middlewares/roleMiddleware");
+
+/* ==============================================
+   TODAS AS ROTAS EXIGEM AUTENTICAÇÃO
+============================================== */
+
+router.use(authMiddleware);
+
+/* ==============================================
+   DASHBOARD COMPLETO
+============================================== */
+
+router.get(
+
+    "/",
+
+    roleMiddleware("ADMIN", "GERENTE", "FUNCIONARIO"),
+
+    DashboardController.dashboard
+
+);
+
+/* ==============================================
+   RESUMO
+============================================== */
+
+router.get(
+
+    "/resumo",
+
+    roleMiddleware("ADMIN", "GERENTE", "FUNCIONARIO"),
+
+    DashboardController.resumo
+
+);
+
+/* ==============================================
+   ÚLTIMAS VENDAS
+============================================== */
+
+router.get(
+
+    "/ultimas-vendas",
+
+    roleMiddleware("ADMIN", "GERENTE", "FUNCIONARIO"),
+
+    DashboardController.ultimasVendas
+
+);
+
+/* ==============================================
+   ÚLTIMAS COMPRAS
+============================================== */
+
+router.get(
+
+    "/ultimas-compras",
+
+    roleMiddleware("ADMIN", "GERENTE", "FUNCIONARIO"),
+
+    DashboardController.ultimasCompras
+
+);
+
+/* ==============================================
+   ESTOQUE BAIXO
+============================================== */
+
+router.get(
+
+    "/estoque-baixo",
+
+    roleMiddleware("ADMIN", "GERENTE", "FUNCIONARIO"),
+
+    DashboardController.estoqueBaixo
+
+);
+
+/* ==============================================
+   AGENDAMENTOS DE HOJE
+============================================== */
+
+router.get(
+
+    "/agendamentos-hoje",
+
+    roleMiddleware("ADMIN", "GERENTE", "FUNCIONARIO"),
+
+    DashboardController.agendamentosHoje
+
+);
+
+/* ==============================================
+   CONTAS VENCIDAS
+============================================== */
+
+router.get(
+
+    "/contas-vencidas",
+
+    roleMiddleware("ADMIN", "GERENTE", "FUNCIONARIO"),
+
+    DashboardController.contasVencidas
+
+);
+
+/* ==============================================
+   PRODUTOS MAIS VENDIDOS
+============================================== */
+
+router.get(
+
+    "/produtos-mais-vendidos",
+
+    roleMiddleware("ADMIN", "GERENTE", "FUNCIONARIO"),
+
+    DashboardController.produtosMaisVendidos
+
+);
+
+/* ==============================================
+   SERVIÇOS MAIS REALIZADOS
+============================================== */
+
+router.get(
+
+    "/servicos-mais-realizados",
+
+    roleMiddleware("ADMIN", "GERENTE", "FUNCIONARIO"),
+
+    DashboardController.servicosMaisRealizados
+
+);
+
+module.exports = router;

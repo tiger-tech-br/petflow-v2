@@ -1,0 +1,213 @@
+"use strict";
+
+const db = require("../database/connection");
+const {
+    sendOptionalEmail,
+    appointmentReminderTemplate,
+    birthdayGreetingTemplate
+} = require("./emailService");
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+let started = false;
+
+async function runDailyReminders() {
+    await Promise.all([
+        createAppointmentReminders(),
+        createBirthdayMessages()
+    ]);
+}
+
+function startReminderJob() {
+    if (started) {
+        return;
+    }
+
+    started = true;
+
+    runDailyReminders().catch(error => {
+        console.warn("[lembretes] falha ao executar lembretes:", error.message);
+    });
+
+    setInterval(() => {
+        runDailyReminders().catch(error => {
+            console.warn("[lembretes] falha ao executar lembretes:", error.message);
+        });
+    }, DAY_MS).unref?.();
+}
+
+async function createAppointmentReminders() {
+    const { rows } = await db.query(
+        `
+            SELECT
+                a.id,
+                a.cliente_id,
+                COALESCE(a.servico, s.nome, 'Atendimento') AS servico,
+                COALESCE(a.data, a.data_agendamento) AS data,
+                COALESCE(a.hora, a.horario) AS hora,
+                c.nome AS cliente,
+                c.email,
+                p.nome AS pet
+            FROM agendamentos a
+            INNER JOIN clientes c
+                ON c.id = a.cliente_id
+            INNER JOIN pets p
+                ON p.id = a.pet_id
+            LEFT JOIN servicos s
+                ON s.id = a.servico_id
+            WHERE c.ativo = TRUE
+              AND COALESCE(a.data, a.data_agendamento) = CURRENT_DATE + INTERVAL '3 days'
+              AND a.status IN ('AGENDADO', 'CONFIRMADO')
+        `
+    );
+
+    for (const item of rows) {
+        const titulo = `Lembrete: ${item.servico} do ${item.pet}`;
+        const mensagem = `${item.servico} do ${item.pet} está agendado para ${formatDate(item.data)} às ${formatTime(item.hora)}.`;
+        const tipo = classifyAppointment(item.servico);
+
+        const created = await createNotificationOncePerDay({
+            clienteId: item.cliente_id,
+            titulo,
+            mensagem,
+            tipo
+        });
+
+        if (!created || !item.email) {
+            continue;
+        }
+
+        const template = appointmentReminderTemplate({
+            name: item.cliente,
+            petName: item.pet,
+            serviceName: item.servico,
+            date: item.data,
+            time: item.hora
+        });
+
+        void sendOptionalEmail({
+            to: item.email,
+            subject: template.subject,
+            html: template.html,
+            text: template.text
+        });
+    }
+}
+
+async function createBirthdayMessages() {
+    const { rows } = await db.query(
+        `
+            SELECT id, nome, email
+            FROM clientes
+            WHERE ativo = TRUE
+              AND data_nascimento IS NOT NULL
+              AND EXTRACT(MONTH FROM data_nascimento) = EXTRACT(MONTH FROM CURRENT_DATE)
+              AND EXTRACT(DAY FROM data_nascimento) = EXTRACT(DAY FROM CURRENT_DATE)
+        `
+    );
+
+    for (const cliente of rows) {
+        const titulo = "Feliz aniversário!";
+        const mensagem = `${firstName(cliente.nome)}, a PetFlow deseja um feliz aniversário.`;
+
+        const created = await createNotificationOncePerDay({
+            clienteId: cliente.id,
+            titulo,
+            mensagem,
+            tipo: "SISTEMA"
+        });
+
+        if (!created || !cliente.email) {
+            continue;
+        }
+
+        const template = birthdayGreetingTemplate({
+            name: cliente.nome
+        });
+
+        void sendOptionalEmail({
+            to: cliente.email,
+            subject: template.subject,
+            html: template.html,
+            text: template.text
+        });
+    }
+}
+
+async function createNotificationOncePerDay({ clienteId, titulo, mensagem, tipo }) {
+    const existing = await db.query(
+        `
+            SELECT id
+            FROM notificacoes
+            WHERE cliente_id = $1
+              AND titulo = $2
+              AND tipo = $3
+              AND DATE(enviada_em) = CURRENT_DATE
+            LIMIT 1
+        `,
+        [clienteId, titulo, tipo]
+    );
+
+    if (existing.rows[0]) {
+        return null;
+    }
+
+    const { rows } = await db.query(
+        `
+            INSERT INTO notificacoes (
+                cliente_id,
+                titulo,
+                mensagem,
+                tipo
+            )
+            VALUES ($1, $2, $3, $4)
+            RETURNING *
+        `,
+        [clienteId, titulo, mensagem, tipo]
+    );
+
+    return rows[0];
+}
+
+function classifyAppointment(serviceName) {
+    const text = String(serviceName || "").toLowerCase();
+
+    if (text.includes("vacina")) {
+        return "VACINA";
+    }
+
+    if (
+        text.includes("consulta") ||
+        text.includes("veterin") ||
+        text.includes("exame")
+    ) {
+        return "CONSULTA";
+    }
+
+    return "AGENDAMENTO";
+}
+
+function firstName(name) {
+    return String(name || "Cliente").trim().split(/\s+/)[0] || "Cliente";
+}
+
+function formatDate(value) {
+    if (!value) {
+        return "data combinada";
+    }
+
+    return new Date(value).toLocaleDateString("pt-BR", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        timeZone: "UTC"
+    });
+}
+
+function formatTime(value) {
+    return String(value || "").slice(0, 5) || "horário combinado";
+}
+
+module.exports = {
+    startReminderJob,
+    runDailyReminders
+};
