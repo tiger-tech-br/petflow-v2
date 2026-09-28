@@ -51,32 +51,8 @@ async function categorias(request, response, next) {
     }
 }
 
-async function servicos(request, response, next) {
-    try {
-        const { rows } = await db.query(`
-            SELECT
-                id,
-                nome,
-                descricao,
-                preco,
-                duracao
-            FROM servicos
-            WHERE ativo = TRUE
-            ORDER BY nome ASC
-            LIMIT 8;
-        `);
-
-        return response.status(200).json({
-            success: true,
-            data: rows
-        });
-    } catch (error) {
-        next(error);
-    }
-}
 
 module.exports = {
     produtos,
-    categorias,
-    servicos
+    categorias
 };

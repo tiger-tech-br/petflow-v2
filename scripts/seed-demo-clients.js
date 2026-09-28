@@ -23,21 +23,7 @@ const demoCustomers = [
         complemento: "Apto 21",
         bairro: "Vila Principe de Gales",
         cidade: "Santo Andre",
-        estado: "SP",
-        pets: [
-            {
-                nome: "Luna",
-                especie: "Cachorro",
-                raca: "Shih-tzu",
-                sexo: "FEMEA",
-                data_nascimento: "2020-07-12",
-                peso: 6.4,
-                cor: "Branco e cinza",
-                porte: "PEQUENO",
-                castrado: true,
-                observacoes: "Cliente demonstrativo."
-            }
-        ]
+        estado: "SP"
     },
     {
         nome: "Rafael Almeida",
@@ -51,21 +37,7 @@ const demoCustomers = [
         complemento: "Bloco B",
         bairro: "Bela Vista",
         cidade: "Sao Paulo",
-        estado: "SP",
-        pets: [
-            {
-                nome: "Thor",
-                especie: "Cachorro",
-                raca: "Golden Retriever",
-                sexo: "MACHO",
-                data_nascimento: "2019-02-20",
-                peso: 29.8,
-                cor: "Dourado",
-                porte: "GRANDE",
-                castrado: false,
-                observacoes: "Gosta de banho com agua morna."
-            }
-        ]
+        estado: "SP"
     },
     {
         nome: "Camila Rocha",
@@ -79,33 +51,7 @@ const demoCustomers = [
         complemento: "Casa",
         bairro: "Vila Mariana",
         cidade: "Sao Paulo",
-        estado: "SP",
-        pets: [
-            {
-                nome: "Mia",
-                especie: "Gato",
-                raca: "Siamês",
-                sexo: "FEMEA",
-                data_nascimento: "2021-11-05",
-                peso: 4.1,
-                cor: "Creme",
-                porte: "PEQUENO",
-                castrado: true,
-                observacoes: "Atendimento calmo."
-            },
-            {
-                nome: "Nino",
-                especie: "Gato",
-                raca: "Sem raca definida",
-                sexo: "MACHO",
-                data_nascimento: "2022-05-14",
-                peso: 4.8,
-                cor: "Preto",
-                porte: "PEQUENO",
-                castrado: true,
-                observacoes: "Cliente demonstrativo."
-            }
-        ]
+        estado: "SP"
     },
     {
         nome: "Bruno Martins",
@@ -119,21 +65,7 @@ const demoCustomers = [
         complemento: "",
         bairro: "Centro",
         cidade: "Sao Caetano do Sul",
-        estado: "SP",
-        pets: [
-            {
-                nome: "Pipoca",
-                especie: "Roedor",
-                raca: "Porquinho-da-india",
-                sexo: "MACHO",
-                data_nascimento: "2023-01-10",
-                peso: 0.9,
-                cor: "Marrom e branco",
-                porte: "PEQUENO",
-                castrado: false,
-                observacoes: "Usar caixa de transporte pequena."
-            }
-        ]
+        estado: "SP"
     }
 ];
 
@@ -240,48 +172,6 @@ async function run() {
                 ]
             );
 
-            await client.query(
-                "DELETE FROM pets WHERE cliente_id = $1",
-                [clienteId]
-            );
-
-            for (const pet of customer.pets) {
-                await client.query(
-                    `
-                        INSERT INTO pets (
-                            empresa_id,
-                            cliente_id,
-                            nome,
-                            especie,
-                            raca,
-                            sexo,
-                            data_nascimento,
-                            peso,
-                            cor,
-                            porte,
-                            castrado,
-                            observacoes,
-                            ativo
-                        )
-                        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,TRUE)
-                        ON CONFLICT DO NOTHING;
-                    `,
-                    [
-                        empresaId,
-                        clienteId,
-                        pet.nome,
-                        pet.especie,
-                        pet.raca,
-                        pet.sexo,
-                        pet.data_nascimento,
-                        pet.peso,
-                        pet.cor,
-                        pet.porte,
-                        pet.castrado,
-                        pet.observacoes
-                    ]
-                );
-            }
         }
 
         await client.query("COMMIT");

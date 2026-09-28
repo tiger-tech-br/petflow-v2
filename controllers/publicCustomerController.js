@@ -815,29 +815,7 @@ async function remove(request, response, next) {
             ]
         );
 
-        await client.query(
-            `
-                DELETE FROM agendamentos
-                WHERE empresa_id = $1
-                  AND cliente_id = $2
-            `,
-            [
-                customer.empresaId,
-                customer.id
-            ]
-        );
 
-        await client.query(
-            `
-                DELETE FROM pets
-                WHERE empresa_id = $1
-                  AND cliente_id = $2
-            `,
-            [
-                customer.empresaId,
-                customer.id
-            ]
-        );
 
         await client.query(
             `

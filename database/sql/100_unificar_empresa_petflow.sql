@@ -15,15 +15,12 @@ BEGIN
     UPDATE usuarios SET empresa_id = v_empresa_id WHERE empresa_id IS DISTINCT FROM v_empresa_id;
     UPDATE clientes SET empresa_id = v_empresa_id WHERE empresa_id IS DISTINCT FROM v_empresa_id;
     UPDATE categorias SET empresa_id = v_empresa_id WHERE empresa_id IS DISTINCT FROM v_empresa_id;
-    UPDATE pets SET empresa_id = v_empresa_id WHERE empresa_id IS DISTINCT FROM v_empresa_id;
     UPDATE produtos SET empresa_id = v_empresa_id WHERE empresa_id IS DISTINCT FROM v_empresa_id;
-    UPDATE servicos SET empresa_id = v_empresa_id WHERE empresa_id IS DISTINCT FROM v_empresa_id;
     UPDATE fornecedores SET empresa_id = v_empresa_id WHERE empresa_id IS DISTINCT FROM v_empresa_id;
     UPDATE compras SET empresa_id = v_empresa_id WHERE empresa_id IS DISTINCT FROM v_empresa_id;
     UPDATE vendas SET empresa_id = v_empresa_id WHERE empresa_id IS DISTINCT FROM v_empresa_id;
     UPDATE itens_compra SET empresa_id = v_empresa_id WHERE empresa_id IS DISTINCT FROM v_empresa_id;
     UPDATE itens_venda SET empresa_id = v_empresa_id WHERE empresa_id IS DISTINCT FROM v_empresa_id;
-    UPDATE agendamentos SET empresa_id = v_empresa_id WHERE empresa_id IS DISTINCT FROM v_empresa_id;
 
     IF to_regclass('public.estoque') IS NOT NULL THEN
         UPDATE estoque SET empresa_id = v_empresa_id WHERE empresa_id IS DISTINCT FROM v_empresa_id;

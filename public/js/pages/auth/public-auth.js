@@ -1,8 +1,6 @@
 "use strict";
 
-const CUSTOMER_API = window.location.hostname === "localhost"
-    ? "http://localhost:4500/api/public"
-    : "/api/public";
+const CUSTOMER_API = "/api/public";
 
 document.addEventListener("DOMContentLoaded", () => {
     clearLegacyPublicSession();

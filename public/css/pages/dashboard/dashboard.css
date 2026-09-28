@@ -309,13 +309,11 @@
     font-weight: 900;
 }
 
-.schedule-list,
 .sales-list,
 .supplier-list {
     display: grid;
 }
 
-.schedule-list article,
 .sales-list article,
 .supplier-list article {
     display: flex;
@@ -326,31 +324,16 @@
     border-bottom: 1px solid #edf2f4;
 }
 
-.schedule-list article:last-child,
 .sales-list article:last-child,
 .supplier-list article:last-child {
     border-bottom: 0;
 }
 
-.schedule-list time {
-    min-width: 64px;
-    min-height: 38px;
-    display: inline-grid;
-    place-items: center;
-    border-radius: 8px;
-    color: var(--admin-teal);
-    background: #e6f6f3;
-    font-size: 13px;
-    font-weight: 900;
-}
-
-.schedule-list strong,
 .sales-list strong,
 .supplier-list strong {
     color: var(--admin-ink);
 }
 
-.schedule-list span,
 .sales-list span,
 .supplier-list span {
     display: block;
@@ -531,7 +514,6 @@
         grid-template-columns: 1fr;
     }
 
-    .schedule-list article,
     .sales-list article,
     .supplier-list article {
         align-items: flex-start;

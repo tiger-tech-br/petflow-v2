@@ -139,14 +139,6 @@ async function findAll(empresaId) {
                     WHEN c.ativo = TRUE THEN 'ativo'
                     ELSE 'inativo'
                 END AS status,
-                COUNT(p.id)::INTEGER AS total_pets,
-                COALESCE(
-                    STRING_AGG(
-                        DISTINCT p.nome,
-                        ', '
-                    ) FILTER (WHERE p.id IS NOT NULL),
-                    'Nenhum pet cadastrado'
-                ) AS pets,
                 CONCAT_WS(
                     ', ',
                     NULLIF(c.endereco, ''),
@@ -161,14 +153,6 @@ async function findAll(empresaId) {
             FROM clientes c
             LEFT JOIN usuarios_clientes uc
                 ON uc.cliente_id = c.id
-            LEFT JOIN pets p
-                ON p.cliente_id = c.id
-               AND p.ativo = TRUE
-               AND (
-                   p.empresa_id = c.empresa_id
-                   OR p.empresa_id IS NULL
-                   OR p.empresa_id = get_petflow_empresa_id()
-               )
             WHERE c.empresa_id = get_petflow_empresa_id()
                OR c.empresa_id IS NULL
                OR uc.cliente_id IS NOT NULL
@@ -176,7 +160,6 @@ async function findAll(empresaId) {
                    $1::uuid IS NOT NULL
                    AND c.empresa_id = $1
                )
-            GROUP BY c.id, uc.email
             ORDER BY c.nome ASC
         `,
         [empresaId || null]

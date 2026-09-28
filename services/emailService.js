@@ -99,37 +99,7 @@ function passwordResetTemplate({ name, resetUrl }) {
     };
 }
 
-function appointmentReminderTemplate({ name, petName, serviceName, date, time }) {
-    const safeName = escapeHtml(firstName(name) || "cliente");
-    const safePet = escapeHtml(petName || "seu pet");
-    const safeService = escapeHtml(serviceName || "atendimento");
-    const when = `${formatDate(date)} às ${formatTime(time)}`;
 
-    return {
-        subject: `Lembrete de agendamento - ${safePet}`,
-        text: `Olá, ${safeName}. Lembrete: ${safeService} do ${safePet} está agendado para ${when}.`,
-        html: baseEmail(`
-            <h1>Lembrete de agendamento</h1>
-            <p>Olá, ${safeName}.</p>
-            <p>Passando para lembrar que <strong>${safeService}</strong> do <strong>${safePet}</strong> está agendado para <strong>${escapeHtml(when)}</strong>.</p>
-            <p>Se precisar remarcar, entre em contato com a PetFlow.</p>
-        `)
-    };
-}
-
-function birthdayGreetingTemplate({ name }) {
-    const safeName = escapeHtml(firstName(name) || "cliente");
-
-    return {
-        subject: "Feliz aniversário - PetFlow",
-        text: `Olá, ${safeName}. A PetFlow deseja um feliz aniversário!`,
-        html: baseEmail(`
-            <h1>Feliz aniversário!</h1>
-            <p>Olá, ${safeName}.</p>
-            <p>A equipe PetFlow deseja um dia muito especial, com carinho, saúde e bons momentos.</p>
-        `)
-    };
-}
 
 function orderReceivedTemplate({ name, orderId, total, items = [] }) {
     const safeName = escapeHtml(firstName(name) || "cliente");
@@ -239,7 +209,7 @@ function baseEmail(content) {
         <div style="font-family:Arial,sans-serif;max-width:620px;margin:0 auto;padding:24px;color:#10212b;line-height:1.55">
             ${content}
             <hr style="border:0;border-top:1px solid #e5edf0;margin:24px 0">
-            <p style="color:#647481;font-size:13px">PetFlow - cuidado, loja e serviços para pets.</p>
+            <p style="color:#647481;font-size:13px">PetFlow - produtos para o bem-estar do seu pet.</p>
         </div>
     `;
 }
@@ -259,22 +229,7 @@ function currency(value) {
     });
 }
 
-function formatDate(value) {
-    if (!value) {
-        return "data combinada";
-    }
 
-    return new Date(value).toLocaleDateString("pt-BR", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-        timeZone: "UTC"
-    });
-}
-
-function formatTime(value) {
-    return String(value || "").slice(0, 5) || "horário combinado";
-}
 
 function escapeHtml(value) {
     return String(value ?? "")
@@ -291,8 +246,6 @@ module.exports = {
     welcomeTemplate,
     emailVerificationTemplate,
     passwordResetTemplate,
-    appointmentReminderTemplate,
-    birthdayGreetingTemplate,
     orderReceivedTemplate,
     paymentApprovedTemplate,
     orderOutForDeliveryTemplate,

@@ -624,29 +624,23 @@ body {
     font-size: 1rem;
     line-height: 1.7;
 }
-
 .categories,
 .products,
-.services,
 .benefits,
 .testimonials,
 .newsletter {
     padding: 74px 0;
 }
-
 .categories-grid,
 .products-grid,
-.services-grid,
 .benefits-grid,
 .testimonials-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 20px;
 }
-
 .category-card,
 .product-card,
-.service-card,
 .benefit-card,
 .testimonial-card {
     overflow: hidden;
@@ -656,18 +650,14 @@ body {
     box-shadow: 0 12px 34px rgba(16, 33, 43, .07);
     transition: transform .2s ease, box-shadow .2s ease;
 }
-
 .category-card:hover,
 .product-card:hover,
-.service-card:hover,
 .benefit-card:hover,
 .testimonial-card:hover {
     transform: translateY(-4px);
     box-shadow: var(--pf-shadow);
 }
-
 .category-card img,
-.service-card img,
 .product-image {
     width: 100%;
     aspect-ratio: 4 / 3;
@@ -680,46 +670,19 @@ body {
     color: inherit;
     text-decoration: none;
 }
-
-.service-card a {
-    height: 100%;
-    display: grid;
-    color: inherit;
-    text-decoration: none;
-}
-
 .category-card h3,
-.service-card h3,
 .benefit-card h3,
 .product-title {
     margin: 16px 18px 8px;
     color: var(--pf-ink);
     font-size: 1.12rem;
 }
-
 .category-card p,
-.service-card p,
 .benefit-card p,
 .product-description {
     margin: 0 18px 18px;
     color: var(--pf-muted);
     line-height: 1.65;
-}
-
-.service-meta {
-    display: flex;
-    align-items: center;
-    justify-content: flex-start;
-    gap: 10px;
-    margin: 0 18px 18px;
-    padding-top: 12px;
-    border-top: 1px solid #edf3f4;
-}
-
-.service-meta strong {
-    color: var(--pf-teal-dark);
-    font-size: 1.08rem;
-    font-weight: 900;
 }
 
 .section-action {
@@ -1536,10 +1499,8 @@ body.favorites-open {
         object-fit: contain;
         background: #eaf5f2;
     }
-
-    .categories-grid,
+.categories-grid,
     .products-grid,
-    .services-grid,
     .benefits-grid,
     .testimonials-grid,
     .newsletter-content,
@@ -1618,10 +1579,8 @@ body.favorites-open {
         aspect-ratio: 16 / 9;
         object-fit: contain;
     }
-
-    .categories,
+.categories,
     .products,
-    .services,
     .benefits,
     .testimonials,
     .newsletter {

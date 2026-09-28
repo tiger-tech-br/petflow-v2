@@ -23,9 +23,9 @@
             <nav class="sidebar-nav" aria-label="Menu administrativo">
                 <a href="/admin/pages/dashboard/dashboard.html" data-active-page="dashboard"><i class="fa-solid fa-house"></i>Painel da Loja</a>
                 <a href="/admin/pages/clientes/clientes.html" data-active-page="clientes" class="active"><i class="fa-solid fa-users"></i>Clientes</a>
-                <a href="/admin/pages/pets/pets.html" data-active-page="pets"><i class="fa-solid fa-paw"></i>Pets</a>
-                <a href="/admin/pages/servicos/servicos.html" data-active-page="servicos"><i class="fa-solid fa-scissors"></i>Serviços</a>
-                <a href="/admin/pages/agendamentos/agendamentos.html" data-active-page="agendamentos"><i class="fa-solid fa-calendar-days"></i>Agendamentos</a>
+
+
+
                 <a href="/admin/pages/funcionarios/funcionarios.html" data-active-page="funcionarios"><i class="fa-solid fa-user-tie"></i>Funcionários</a>
                 <a href="/admin/pages/categorias/categorias.html" data-active-page="categorias"><i class="fa-solid fa-tags"></i>Categorias</a>
                 <a href="/admin/pages/produtos/produtos.html" data-active-page="produtos"><i class="fa-solid fa-box"></i>Produtos</a>
@@ -58,7 +58,7 @@
                         <i class="fa-solid fa-user-plus"></i>
                         <div>
                             <h2>Cadastrar Cliente</h2>
-                            <p>Registre dados do tutor para compras, pedidos, agendamentos e vínculo com pets.</p>
+                            <p>Registre os dados do cliente para compras e entregas.</p>
                         </div>
                     </div>
                     <a class="btn" href="/admin/pages/clientes/clientes.html">
@@ -84,14 +84,7 @@
                             <small>Base para pedidos e delivery.</small>
                         </div>
                     </article>
-                    <article class="insight-card">
-                        <i class="fa-solid fa-paw"></i>
-                        <div>
-                            <span>Pets</span>
-                            <strong>Depois</strong>
-                            <small>O pet pode ser vinculado após salvar.</small>
-                        </div>
-                    </article>
+
                     <article class="insight-card">
                         <i class="fa-solid fa-bag-shopping"></i>
                         <div>
@@ -181,11 +174,8 @@
                             <h3>Próximo passo</h3>
                         </div>
                         <div class="form">
-                            <p class="muted">Depois de salvar, cadastre o pet do tutor ou volte para a lista de clientes para conferir o registro.</p>
-                            <a class="btn btn-primary" href="/admin/pages/pets/pets.html">
-                                <i class="fa-solid fa-paw"></i>
-                                Ir para Pets
-                            </a>
+                            <p class="muted">Depois de salvar, volte para a lista de clientes para conferir o registro.</p>
+
                             <a class="btn" href="/admin/pages/clientes/clientes.html">
                                 <i class="fa-solid fa-users"></i>
                                 Ver clientes
@@ -197,7 +187,7 @@
         </main>
     </div>
 
-    <script src="/js/utils/storage.js?v=20260804-1"></script>
+    <script src="/js/utils/storage.js?v=20260928-1"></script>
     <script src="/js/services/api.js"></script>
     <script src="/js/pages/auth/authGuard.js"></script>
     <script>

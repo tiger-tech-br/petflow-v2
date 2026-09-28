@@ -48,19 +48,7 @@ const RelatorioService = {
 
     },
 
-    /* ==============================================
-       PETS
-    ============================================== */
 
-    async getPets(periodo) {
-
-        return await apiGet(
-
-            `/relatorios/pets/${periodo}`
-
-        );
-
-    },
 
     /* ==============================================
        PRODUTOS
@@ -104,19 +92,7 @@ const RelatorioService = {
 
     },
 
-    /* ==============================================
-       AGENDAMENTOS
-    ============================================== */
 
-    async getAppointments(periodo) {
-
-        return await apiGet(
-
-            `/relatorios/agendamentos/${periodo}`
-
-        );
-
-    },
 
     /* ==============================================
        EXPORTAR PDF

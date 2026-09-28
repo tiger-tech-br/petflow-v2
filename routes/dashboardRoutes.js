@@ -85,19 +85,8 @@ router.get(
 
 );
 
-/* ==============================================
-   AGENDAMENTOS DE HOJE
-============================================== */
 
-router.get(
 
-    "/agendamentos-hoje",
-
-    roleMiddleware("ADMIN", "GERENTE", "FUNCIONARIO"),
-
-    DashboardController.agendamentosHoje
-
-);
 
 /* ==============================================
    CONTAS VENCIDAS
@@ -127,18 +116,7 @@ router.get(
 
 );
 
-/* ==============================================
-   SERVIÇOS MAIS REALIZADOS
-============================================== */
 
-router.get(
 
-    "/servicos-mais-realizados",
-
-    roleMiddleware("ADMIN", "GERENTE", "FUNCIONARIO"),
-
-    DashboardController.servicosMaisRealizados
-
-);
 
 module.exports = router;

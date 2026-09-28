@@ -32,16 +32,6 @@ class DashboardModel {
                     WHERE empresa_id = $1
                 ) AS total_clientes,
 
-                /* Pets */
-
-                (
-                    SELECT COUNT(*)
-
-                    FROM pets
-
-                    WHERE empresa_id = $1
-                ) AS total_pets,
-
                 /* Produtos */
 
                 (
@@ -133,19 +123,6 @@ class DashboardModel {
                     AND status='PENDENTE'
 
                 ) AS contas_pagar,
-
-                /* Agendamentos */
-
-                (
-                    SELECT COUNT(*)
-
-                    FROM agendamentos
-
-                    WHERE empresa_id=$1
-
-                    AND DATE(COALESCE(data, data_agendamento))=CURRENT_DATE
-
-                ) AS agendamentos_hoje,
 
                 (
                     SELECT COUNT(*)
@@ -319,36 +296,7 @@ class DashboardModel {
 
     }
 
-    /* ==============================================
-       AGENDAMENTOS DE HOJE
-    ============================================== */
 
-    static async agendamentosHoje(empresaId) {
-
-        const query = `
-            SELECT
-                a.id,
-                c.nome AS cliente,
-                p.nome AS pet,
-                a.servico,
-                COALESCE(a.data, a.data_agendamento) AS data,
-                COALESCE(a.hora, a.horario) AS hora,
-                a.status
-            FROM agendamentos a
-            LEFT JOIN clientes c
-                ON c.id = a.cliente_id
-            LEFT JOIN pets p
-                ON p.id = a.pet_id
-            WHERE a.empresa_id = $1
-              AND DATE(COALESCE(a.data, a.data_agendamento)) = CURRENT_DATE
-            ORDER BY COALESCE(a.hora, a.horario) ASC;
-        `;
-
-        const { rows } = await db.query(query, [empresaId]);
-
-        return rows;
-
-    }
 
     /* ==============================================
        CONTAS VENCIDAS
@@ -404,31 +352,7 @@ class DashboardModel {
 
     }
 
-    /* ==============================================
-       SERVIÇOS MAIS REALIZADOS
-    ============================================== */
 
-    static async servicosMaisRealizados(empresaId, limite = 10) {
-
-        const query = `
-            SELECT
-                a.servico AS nome,
-                COUNT(*) AS quantidade
-            FROM agendamentos a
-            WHERE a.empresa_id = $1
-            GROUP BY a.servico
-            ORDER BY quantidade DESC
-            LIMIT $2;
-        `;
-
-        const { rows } = await db.query(query, [
-            empresaId,
-            limite
-        ]);
-
-        return rows;
-
-    }
 
 }
 

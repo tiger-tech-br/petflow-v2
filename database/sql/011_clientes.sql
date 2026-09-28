@@ -2,7 +2,7 @@
 ==========================================================
  PETFLOW
  Arquivo: 011_clientes.sql
- Descrição: Cadastro dos tutores dos pets.
+ Descrição: Cadastro dos clientes da loja.
 ==========================================================
 */
 

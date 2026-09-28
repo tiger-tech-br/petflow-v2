@@ -1,8 +1,6 @@
 "use strict";
 
-const CATEGORY_API = window.location.hostname === "localhost"
-    ? "http://localhost:4500/api/public"
-    : "/api/public";
+const CATEGORY_API = "/api/public";
 
 const CATEGORY_CONFIG = {
     caes: {

@@ -236,7 +236,6 @@ function criarLinha(cliente) {
 
             <td>${cliente.email}</td>
 
-            <td>${cliente.pets}</td>
 
             <td>${cliente.cidade}</td>
 
@@ -274,11 +273,6 @@ function editarCliente(id) {
 
 }
 
-function visualizarPets(id) {
-
-    console.log("Pets:", id);
-
-}
 
 function visualizarHistorico(id) {
 

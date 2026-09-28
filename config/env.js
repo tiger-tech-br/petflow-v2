@@ -68,7 +68,7 @@ if (
 
 module.exports = {
 
-    PORT: process.env.PORT || 4500,
+    PORT: process.env.PORT || 4501,
 
     DB_HOST: process.env.DB_HOST,
 
@@ -100,7 +100,7 @@ module.exports = {
 
     EMAIL_TEST_TO: process.env.EMAIL_TEST_TO || "suporte@tigertech.dev.br",
 
-    APP_URL: process.env.APP_URL || `http://localhost:${process.env.PORT || 4500}`,
+    APP_URL: process.env.APP_URL || `http://localhost:${process.env.PORT || 4501}`,
 
     PAGSEGURO_BASE_URL: process.env.PAGSEGURO_BASE_URL,
 

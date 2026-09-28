@@ -19,8 +19,6 @@ CREATE TABLE IF NOT EXISTS notificacoes (
     tipo VARCHAR(30) NOT NULL
         CHECK (
             tipo IN (
-                'AGENDAMENTO',
-                'VACINA',
                 'CONSULTA',
                 'PROMOCAO',
                 'SISTEMA'

@@ -2,7 +2,7 @@
 ==========================================================
  PETFLOW
  Arquivo: 012_usuarios_clientes.sql
- Descrição: Login dos clientes (tutores dos pets).
+ Descrição: Login dos clientes da loja.
 ==========================================================
 */
 

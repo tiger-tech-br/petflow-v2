@@ -20,13 +20,9 @@ class DashboardService {
 
             estoqueBaixo,
 
-            agendamentosHoje,
-
             contasVencidas,
 
-            produtosMaisVendidos,
-
-            servicosMaisRealizados
+            produtosMaisVendidos
 
         ] = await Promise.all([
 
@@ -38,13 +34,9 @@ class DashboardService {
 
             DashboardModel.estoqueBaixo(empresaId),
 
-            DashboardModel.agendamentosHoje(empresaId),
-
             DashboardModel.contasVencidas(empresaId),
 
-            DashboardModel.produtosMaisVendidos(empresaId),
-
-            DashboardModel.servicosMaisRealizados(empresaId)
+            DashboardModel.produtosMaisVendidos(empresaId)
 
         ]);
 
@@ -58,13 +50,9 @@ class DashboardService {
 
             estoqueBaixo,
 
-            agendamentosHoje,
-
             contasVencidas,
 
-            produtosMaisVendidos,
-
-            servicosMaisRealizados
+            produtosMaisVendidos
 
         };
 
@@ -110,15 +98,7 @@ class DashboardService {
 
     }
 
-    /* ==============================================
-       AGENDAMENTOS
-    ============================================== */
 
-    static async agendamentosHoje(empresaId) {
-
-        return DashboardModel.agendamentosHoje(empresaId);
-
-    }
 
     /* ==============================================
        CONTAS VENCIDAS
@@ -140,15 +120,7 @@ class DashboardService {
 
     }
 
-    /* ==============================================
-       SERVIÇOS MAIS REALIZADOS
-    ============================================== */
 
-    static async servicosMaisRealizados(empresaId) {
-
-        return DashboardModel.servicosMaisRealizados(empresaId);
-
-    }
 
 }
 

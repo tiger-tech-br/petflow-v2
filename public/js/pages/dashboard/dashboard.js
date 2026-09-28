@@ -10,9 +10,7 @@ document.addEventListener("DOMContentLoaded", () => {
     window.setInterval(loadDashboard, 30000);
 });
 
-const DASHBOARD_API = window.location.hostname === "localhost"
-    ?"http://localhost:4500/api"
-    : "/api";
+const DASHBOARD_API = "/api";
 
 let dashboardNotifications = [];
 let unreadNotifications = 0;
@@ -150,7 +148,6 @@ async function loadDashboard() {
         const dashboard = data?.data || data || {};
 
         renderSummary(dashboard.resumo || {});
-        renderSchedule(dashboard.agendamentosHoje || []);
         renderSales(dashboard.ultimasVendas || []);
         renderSuppliers(dashboard.estoqueBaixo || [], dashboard.ultimasCompras || []);
         updateProfileName();
@@ -179,9 +176,9 @@ function renderSummary(summary) {
             note: `${currency(summary.contas_receber)} a receber`
         },
         {
-            label: "Agenda de hoje",
-            value: number(summary.agendamentos_hoje),
-            note: `${number(summary.total_pets)} pets cadastrados`
+            label: "Produtos cadastrados",
+            value: number(summary.total_produtos),
+            note: `${number(summary.total_clientes)} clientes cadastrados`
         },
         {
             label: "Reposição pendente",
@@ -205,29 +202,6 @@ function renderSummary(summary) {
         if (strong) strong.textContent = item.value;
         if (small) small.textContent = item.note;
     });
-}
-
-function renderSchedule(items) {
-    const list = document.querySelector(".schedule-list");
-
-    if (!list) {
-        return;
-    }
-
-    if (!items.length) {
-        list.innerHTML = emptyState("Nenhum agendamento para hoje.");
-        return;
-    }
-
-    list.innerHTML = items.map(item => `
-        <article>
-            <time>${escapeHtml(formatTime(item.hora))}</time>
-            <div>
-                <strong>${escapeHtml(item.servico || "Serviço agendado")} - ${escapeHtml(item.pet || "Pet")}</strong>
-                <span>Cliente: ${escapeHtml(item.cliente || "Não informado")}</span>
-            </div>
-        </article>
-    `).join("");
 }
 
 function renderSales(items) {
@@ -428,7 +402,7 @@ function renderDashboardError(message) {
         item.textContent = "-";
     });
 
-    const lists = document.querySelectorAll(".schedule-list, .sales-list, .supplier-list");
+    const lists = document.querySelectorAll(".sales-list, .supplier-list");
     lists.forEach(list => {
         list.innerHTML = emptyState(message);
     });

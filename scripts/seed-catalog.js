@@ -15,14 +15,6 @@ const categories = [
     ["Farmácia Pet", "Suplementos, antipulgas e itens de saúde animal."]
 ];
 
-const services = [
-    ["Banho", "Banho completo com shampoo profissional.", 59.9, 60],
-    ["Tosa higiênica", "Acabamento de patas, barriga e região íntima.", 49.9, 45],
-    ["Tosa completa", "Tosa personalizada por porte e tipo de pelagem.", 89.9, 90],
-    ["Consulta veterinária", "Avaliação clínica com veterinário.", 129.9, 40],
-    ["Vacinação", "Aplicação e registro de vacina.", 99.9, 30],
-    ["Hotelzinho", "Diária supervisionada para cães.", 79.9, 480]
-];
 
 const products = [
     ["Rações", "Ração Canis Prime Adultos 10kg", "Alimento premium para cães adultos.", "CANIS-PRIME-10KG", "PetFlow Prime", 189.9, 128.5, 18, "/images/products/petflow-prime-racao.jpg"],
@@ -101,23 +93,6 @@ async function run() {
             [empresaId]
         );
 
-        for (const [nome, descricao, preco, duracao] of services) {
-            await client.query(
-                `
-                    INSERT INTO servicos (empresa_id, nome, descricao, preco, duracao, duracao_minutos, ativo)
-                    VALUES ($1, $2, $3, $4, $5, $5, TRUE)
-                    ON CONFLICT (nome)
-                    DO UPDATE SET
-                        descricao = EXCLUDED.descricao,
-                        preco = EXCLUDED.preco,
-                        duracao = EXCLUDED.duracao,
-                        duracao_minutos = EXCLUDED.duracao_minutos,
-                        ativo = TRUE,
-                        updated_at = NOW();
-                `,
-                [empresaId, nome, descricao, preco, duracao]
-            );
-        }
 
         for (const [categoria, nome, descricao, sku, marca, preco, custo, quantidade, foto] of products) {
             const categoriaId = categoryIds.get(categoria);

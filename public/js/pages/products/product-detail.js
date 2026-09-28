@@ -1,8 +1,6 @@
 "use strict";
 
-const PRODUCT_API = window.location.hostname === "localhost"
-    ? "http://localhost:4500/api/public"
-    : "/api/public";
+const PRODUCT_API = "/api/public";
 
 let currentProduct = null;
 

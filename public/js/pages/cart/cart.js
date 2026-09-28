@@ -1,8 +1,6 @@
 "use strict";
 
-const CART_API = window.location.hostname === "localhost"
-    ? "http://localhost:4500/api/public"
-    : "/api/public";
+const CART_API = "/api/public";
 
 let cartProducts = [];
 let cart = readCart();

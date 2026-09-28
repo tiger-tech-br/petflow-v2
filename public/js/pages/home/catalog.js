@@ -1,9 +1,7 @@
 ﻿"use strict";
 
 document.addEventListener("DOMContentLoaded", () => {
-    enhanceStaticServiceCards();
     loadPublicCatalog();
-    loadPublicServices();
     setupPublicSearch();
     setupCartCheckout();
     setupFavoritesPanel();
@@ -12,9 +10,7 @@ document.addEventListener("DOMContentLoaded", () => {
     setupNewsletterForm();
 });
 
-const PUBLIC_API = window.location.hostname === "localhost"
-    ?"http://localhost:4500/api/public"
-    : "/api/public";
+const PUBLIC_API = "/api/public";
 
 let publicProducts = [];
 let publicCart = normalizeCartStorage();
@@ -60,113 +56,6 @@ async function loadPublicCatalog() {
         applyPublicSearch(getSearchValue(), false);
         updateHeaderCounters();
     }
-}
-
-async function loadPublicServices() {
-    const grid = document.querySelector(".services-grid");
-
-    if (!grid) {
-        return;
-    }
-
-    try {
-        const response = await fetch(`${PUBLIC_API}/servicos`);
-
-        if (!response.ok) {
-            throw new Error("Serviços indisponíveis");
-        }
-
-        const payload = await response.json();
-        const services = Array.isArray(payload.data) ?payload.data : [];
-
-        if (services.length) {
-            renderServices(services.slice(0, 6));
-        }
-    } catch {
-        // Mantem os cards estaticos como fallback.
-    }
-}
-
-function renderServices(services) {
-    const grid = document.querySelector(".services-grid");
-
-    if (!grid) {
-        return;
-    }
-
-    grid.innerHTML = services.map(service => {
-        const image = serviceImage(service.nome);
-        const href = `/servicos/${serviceSlug(service.nome)}`;
-
-        return `
-            <article class="service-card">
-                <a href="${escapeHtml(href)}" aria-label="Ver serviço ${escapeHtml(service.nome)}">
-                    <img src="${escapeHtml(image)}" alt="${escapeHtml(service.nome)}" loading="lazy" decoding="async">
-                    <h3>${escapeHtml(service.nome)}</h3>
-                    <p>${escapeHtml(service.descricao || "Atendimento profissional para cuidar do bem-estar do seu pet.")}</p>
-                    <div class="service-meta">
-                        <strong>${currency(service.preco)}</strong>
-                    </div>
-                </a>
-            </article>
-        `;
-    }).join("");
-}
-
-function enhanceStaticServiceCards() {
-    document.querySelectorAll(".service-card").forEach(card => {
-        if (card.querySelector("a")) {
-            return;
-        }
-
-        const title = card.querySelector("h3")?.textContent;
-        const slug = staticServiceSlug(title);
-
-        if (!slug) {
-            return;
-        }
-
-        const link = document.createElement("a");
-        link.href = `/servicos/${slug}`;
-        link.setAttribute("aria-label", `Ver serviço ${String(title || "").trim()}`);
-
-        while (card.firstChild) {
-            link.appendChild(card.firstChild);
-        }
-
-        card.appendChild(link);
-    });
-}
-
-function staticServiceSlug(value) {
-    const normalized = normalize(value);
-
-    if (normalized === "tosa") return "tosa-completa";
-    if (normalized.includes("veterin")) return "consulta-veterinaria";
-    if (normalized.includes("banho")) return "banho";
-    if (normalized.includes("vacin")) return "vacinacao";
-    if (normalized.includes("hotel")) return "hotelzinho";
-
-    return "";
-}
-
-function serviceImage(name) {
-    const normalized = normalize(name);
-
-    if (normalized.includes("higienica")) return "/images/services/tosa-higienica.jpg";
-    if (normalized.includes("tosa")) return "/images/services/tosa.jpg";
-    if (normalized.includes("consulta") || normalized.includes("veterin")) return "/images/services/veterinario.jpg";
-    if (normalized.includes("vacina")) return "/images/services/vacinacao.jpg";
-    if (normalized.includes("hotel")) return "/images/services/hotelzinho.jpg";
-    if (normalized.includes("delivery")) return "/images/services/delivery.jpg";
-
-    return "/images/services/banho-tosa.jpg";
-}
-
-function serviceSlug(value) {
-    return normalize(value)
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/(^-|-$)/g, "");
 }
 
 function productSlug(product) {
@@ -274,12 +163,12 @@ function applyPublicSearch(term, shouldScroll) {
 
     if (!normalized) {
         renderProducts(publicProducts.slice(0, 6));
-        filterStaticCards(".category-card, .service-card", "");
+        filterStaticCards(".category-card", "");
         return;
     }
 
     filterProducts(term);
-    filterStaticCards(".category-card, .service-card", normalized);
+    filterStaticCards(".category-card", normalized);
 
     if (shouldScroll) {
         document.getElementById("products")?.scrollIntoView({ behavior: "smooth" });

@@ -172,37 +172,7 @@ class DashboardController {
 
     }
 
-    /* ==============================================
-       AGENDAMENTOS DE HOJE
-    ============================================== */
 
-    static async agendamentosHoje(req, res) {
-
-        try {
-
-            const empresaId = req.user.empresa_id;
-
-            const dados = await DashboardService.agendamentosHoje(
-
-                empresaId
-
-            );
-
-            return res.json(dados);
-
-        } catch (error) {
-
-            console.error(error);
-
-            return res.status(500).json({
-
-                message: "Erro ao buscar agendamentos."
-
-            });
-
-        }
-
-    }
 
     /* ==============================================
        CONTAS VENCIDAS
@@ -268,37 +238,7 @@ class DashboardController {
 
     }
 
-    /* ==============================================
-       SERVIÇOS MAIS REALIZADOS
-    ============================================== */
 
-    static async servicosMaisRealizados(req, res) {
-
-        try {
-
-            const empresaId = req.user.empresa_id;
-
-            const dados = await DashboardService.servicosMaisRealizados(
-
-                empresaId
-
-            );
-
-            return res.json(dados);
-
-        } catch (error) {
-
-            console.error(error);
-
-            return res.status(500).json({
-
-                message: "Erro ao buscar serviços mais realizados."
-
-            });
-
-        }
-
-    }
 
 }
 

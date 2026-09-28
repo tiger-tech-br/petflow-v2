@@ -26,9 +26,7 @@ const authRoutes = require("./routes/authRoutes");
 
 const clienteRoutes = require("./routes/clienteRoutes");
 
-const petRoutes = require("./routes/petRoutes");
 
-const agendamentoRoutes = require("./routes/agendamentoRoutes");
 
 const funcionarioRoutes = require("./routes/funcionarioRoutes");
 
@@ -44,7 +42,6 @@ const vendaRoutes = require("./routes/vendaRoutes");
 
 const itemVendaRoutes = require("./routes/itemVendaRoutes");
 
-const servicoRoutes = require("./routes/servicoRoutes");
 
 const fornecedorRoutes = require("./routes/fornecedorRoutes");
 
@@ -106,6 +103,11 @@ app.use(express.urlencoded({
 
 app.use(express.static(path.join(__dirname, "public")));
 
+// Modulos fora do escopo da loja de produtos, inclusive acesso direto.
+app.use(["/admin/pages/servicos", "/admin/pages/agendamentos", "/admin/pages/pets"], (req, res) => {
+    res.status(404).json({ success: false, message: "Modulo indisponivel nesta loja." });
+});
+
 app.use("/admin", express.static(path.join(__dirname, "admin")));
 
 /* ==================================================
@@ -142,11 +144,7 @@ app.get("/meus-pedidos", (request, response) => {
 
 });
 
-app.get("/meus-pets", (request, response) => {
 
-    response.sendFile(path.join(__dirname, "views", "auth", "pets.html"));
-
-});
 
 app.get("/sacola", (request, response) => {
 
@@ -184,11 +182,7 @@ app.get("/produtos/:slug", (request, response) => {
 
 });
 
-app.get("/servicos/:slug", (request, response) => {
 
-    response.sendFile(path.join(__dirname, "views", "services", "detail.html"));
-
-});
 
 app.get("/api", (request, response) => {
 
@@ -214,9 +208,7 @@ app.use("/api/public", publicCatalogRoutes);
 
 app.use("/api/clientes", clienteRoutes);
 
-app.use("/api/pets", petRoutes);
 
-app.use("/api/agendamentos", agendamentoRoutes);
 
 app.use("/api/funcionarios", funcionarioRoutes);
 
@@ -232,7 +224,6 @@ app.use("/api/vendas", vendaRoutes);
 
 app.use("/api/itens-venda", itemVendaRoutes);
 
-app.use("/api/servicos", servicoRoutes);
 
 app.use("/api/fornecedores", fornecedorRoutes);
 

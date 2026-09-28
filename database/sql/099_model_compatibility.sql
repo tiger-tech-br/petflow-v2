@@ -57,15 +57,12 @@ ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS token_recuperacao VARCHAR(255);
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS token_expiracao TIMESTAMPTZ;
 ALTER TABLE clientes ADD COLUMN IF NOT EXISTS empresa_id UUID;
 ALTER TABLE categorias ADD COLUMN IF NOT EXISTS empresa_id UUID;
-ALTER TABLE pets ADD COLUMN IF NOT EXISTS empresa_id UUID;
 ALTER TABLE produtos ADD COLUMN IF NOT EXISTS empresa_id UUID;
-ALTER TABLE servicos ADD COLUMN IF NOT EXISTS empresa_id UUID;
 ALTER TABLE fornecedores ADD COLUMN IF NOT EXISTS empresa_id UUID;
 ALTER TABLE compras ADD COLUMN IF NOT EXISTS empresa_id UUID;
 ALTER TABLE vendas ADD COLUMN IF NOT EXISTS empresa_id UUID;
 ALTER TABLE itens_compra ADD COLUMN IF NOT EXISTS empresa_id UUID;
 ALTER TABLE itens_venda ADD COLUMN IF NOT EXISTS empresa_id UUID;
-ALTER TABLE agendamentos ADD COLUMN IF NOT EXISTS empresa_id UUID;
 ALTER TABLE usuarios_clientes ADD COLUMN IF NOT EXISTS email VARCHAR(150);
 
 UPDATE usuarios_clientes uc
@@ -80,28 +77,22 @@ ON usuarios_clientes(cliente_id);
 UPDATE usuarios SET empresa_id = get_petflow_empresa_id() WHERE empresa_id IS NULL;
 UPDATE clientes SET empresa_id = get_petflow_empresa_id() WHERE empresa_id IS NULL;
 UPDATE categorias SET empresa_id = get_petflow_empresa_id() WHERE empresa_id IS NULL;
-UPDATE pets SET empresa_id = get_petflow_empresa_id() WHERE empresa_id IS NULL;
 UPDATE produtos SET empresa_id = get_petflow_empresa_id() WHERE empresa_id IS NULL;
-UPDATE servicos SET empresa_id = get_petflow_empresa_id() WHERE empresa_id IS NULL;
 UPDATE fornecedores SET empresa_id = get_petflow_empresa_id() WHERE empresa_id IS NULL;
 UPDATE compras SET empresa_id = get_petflow_empresa_id() WHERE empresa_id IS NULL;
 UPDATE vendas SET empresa_id = get_petflow_empresa_id() WHERE empresa_id IS NULL;
 UPDATE itens_compra SET empresa_id = get_petflow_empresa_id() WHERE empresa_id IS NULL;
 UPDATE itens_venda SET empresa_id = get_petflow_empresa_id() WHERE empresa_id IS NULL;
-UPDATE agendamentos SET empresa_id = get_petflow_empresa_id() WHERE empresa_id IS NULL;
 
 ALTER TABLE usuarios ALTER COLUMN empresa_id SET DEFAULT get_petflow_empresa_id();
 ALTER TABLE clientes ALTER COLUMN empresa_id SET DEFAULT get_petflow_empresa_id();
 ALTER TABLE categorias ALTER COLUMN empresa_id SET DEFAULT get_petflow_empresa_id();
-ALTER TABLE pets ALTER COLUMN empresa_id SET DEFAULT get_petflow_empresa_id();
 ALTER TABLE produtos ALTER COLUMN empresa_id SET DEFAULT get_petflow_empresa_id();
-ALTER TABLE servicos ALTER COLUMN empresa_id SET DEFAULT get_petflow_empresa_id();
 ALTER TABLE fornecedores ALTER COLUMN empresa_id SET DEFAULT get_petflow_empresa_id();
 ALTER TABLE compras ALTER COLUMN empresa_id SET DEFAULT get_petflow_empresa_id();
 ALTER TABLE vendas ALTER COLUMN empresa_id SET DEFAULT get_petflow_empresa_id();
 ALTER TABLE itens_compra ALTER COLUMN empresa_id SET DEFAULT get_petflow_empresa_id();
 ALTER TABLE itens_venda ALTER COLUMN empresa_id SET DEFAULT get_petflow_empresa_id();
-ALTER TABLE agendamentos ALTER COLUMN empresa_id SET DEFAULT get_petflow_empresa_id();
 
 ALTER TABLE categorias ADD COLUMN IF NOT EXISTS status BOOLEAN DEFAULT TRUE;
 UPDATE categorias SET status = ativo WHERE status IS NULL;
@@ -160,46 +151,6 @@ BEFORE INSERT OR UPDATE ON produtos
 FOR EACH ROW
 EXECUTE FUNCTION sync_produtos_commerce();
 
-ALTER TABLE pets ADD COLUMN IF NOT EXISTS idade INTEGER;
-ALTER TABLE pets ADD COLUMN IF NOT EXISTS status BOOLEAN DEFAULT TRUE;
-UPDATE pets SET status = ativo WHERE status IS NULL;
-
-CREATE OR REPLACE FUNCTION sync_pets_status()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-AS $$
-BEGIN
-    NEW.status := COALESCE(NEW.status, NEW.ativo, TRUE);
-    NEW.ativo := COALESCE(NEW.ativo, NEW.status, TRUE);
-    RETURN NEW;
-END;
-$$;
-
-DROP TRIGGER IF EXISTS trg_sync_pets_status ON pets;
-CREATE TRIGGER trg_sync_pets_status
-BEFORE INSERT OR UPDATE ON pets
-FOR EACH ROW
-EXECUTE FUNCTION sync_pets_status();
-
-ALTER TABLE servicos ADD COLUMN IF NOT EXISTS duracao INTEGER;
-UPDATE servicos SET duracao = COALESCE(duracao, duracao_minutos);
-
-CREATE OR REPLACE FUNCTION sync_servicos_duracao()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-AS $$
-BEGIN
-    NEW.duracao := COALESCE(NEW.duracao, NEW.duracao_minutos, 30);
-    NEW.duracao_minutos := COALESCE(NEW.duracao_minutos, NEW.duracao, 30);
-    RETURN NEW;
-END;
-$$;
-
-DROP TRIGGER IF EXISTS trg_sync_servicos_duracao ON servicos;
-CREATE TRIGGER trg_sync_servicos_duracao
-BEFORE INSERT OR UPDATE ON servicos
-FOR EACH ROW
-EXECUTE FUNCTION sync_servicos_duracao();
 
 ALTER TABLE fornecedores ADD COLUMN IF NOT EXISTS nome VARCHAR(150);
 UPDATE fornecedores SET nome = COALESCE(nome, nome_fantasia, razao_social);
@@ -338,35 +289,6 @@ CREATE TABLE IF NOT EXISTS estoque (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_estoque_empresa_produto
 ON estoque(empresa_id, produto_id);
 
-ALTER TABLE agendamentos ADD COLUMN IF NOT EXISTS funcionario_id UUID;
-ALTER TABLE agendamentos ADD COLUMN IF NOT EXISTS servico VARCHAR(150);
-ALTER TABLE agendamentos ADD COLUMN IF NOT EXISTS data DATE;
-ALTER TABLE agendamentos ADD COLUMN IF NOT EXISTS hora TIME;
-ALTER TABLE agendamentos ADD COLUMN IF NOT EXISTS valor NUMERIC(10,2);
-ALTER TABLE agendamentos ADD COLUMN IF NOT EXISTS data_agendamento DATE;
-ALTER TABLE agendamentos ADD COLUMN IF NOT EXISTS horario TIME;
-ALTER TABLE agendamentos ALTER COLUMN servico_id DROP NOT NULL;
-ALTER TABLE agendamentos ALTER COLUMN valor SET DEFAULT 0;
-
-CREATE OR REPLACE FUNCTION sync_agendamentos_datas()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-AS $$
-BEGIN
-    NEW.data := COALESCE(NEW.data, NEW.data_agendamento);
-    NEW.hora := COALESCE(NEW.hora, NEW.horario);
-    NEW.data_agendamento := COALESCE(NEW.data_agendamento, NEW.data, CURRENT_DATE);
-    NEW.horario := COALESCE(NEW.horario, NEW.hora, CURRENT_TIME);
-    NEW.valor := COALESCE(NEW.valor, 0);
-    RETURN NEW;
-END;
-$$;
-
-DROP TRIGGER IF EXISTS trg_sync_agendamentos_datas ON agendamentos;
-CREATE TRIGGER trg_sync_agendamentos_datas
-BEFORE INSERT OR UPDATE ON agendamentos
-FOR EACH ROW
-EXECUTE FUNCTION sync_agendamentos_datas();
 
 CREATE TABLE IF NOT EXISTS funcionarios (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

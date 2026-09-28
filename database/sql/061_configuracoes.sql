@@ -48,10 +48,6 @@ CREATE TABLE IF NOT EXISTS configuracoes (
 
     chave_pix VARCHAR(255),
 
-    dias_lembrete_vacina INTEGER NOT NULL DEFAULT 7,
-
-    dias_lembrete_agendamento INTEGER NOT NULL DEFAULT 1,
-
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -78,12 +74,6 @@ CREATE TABLE IF NOT EXISTS configuracoes (
             OR horario_fechamento IS NULL
             OR horario_abertura < horario_fechamento
         ),
-
-    CONSTRAINT chk_configuracoes_dias_vacina
-        CHECK (dias_lembrete_vacina >= 0),
-
-    CONSTRAINT chk_configuracoes_dias_agendamento
-        CHECK (dias_lembrete_agendamento >= 0),
 
     CONSTRAINT chk_configuracoes_email
         CHECK (

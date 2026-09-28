@@ -4,9 +4,6 @@
     const links = [
         ["dashboard", "/admin/pages/dashboard/dashboard.html", "fa-house", "Painel da Loja"],
         ["clientes", "/admin/pages/clientes/clientes.html", "fa-users", "Clientes"],
-        ["pets", "/admin/pages/pets/pets.html", "fa-paw", "Pets"],
-        ["servicos", "/admin/pages/servicos/servicos.html", "fa-scissors", "Serviços"],
-        ["agendamentos", "/admin/pages/agendamentos/agendamentos.html", "fa-calendar-days", "Agendamentos"],
         ["produtos", "/admin/pages/produtos/produtos.html", "fa-box", "Produtos"],
         ["estoque", "/admin/pages/estoque/estoque.html", "fa-boxes-stacked", "Estoque"],
         ["vendas", "/admin/pages/vendas/vendas.html", "fa-box-open", "Pedidos"],

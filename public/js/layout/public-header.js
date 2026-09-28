@@ -48,7 +48,7 @@
                             type="search"
                             id="publicHeaderSearch"
                             name="search"
-                            placeholder="Buscar produtos e serviços"
+                            placeholder="Buscar produtos"
                             maxlength="100"
                             aria-label="Pesquisar produtos">
                         <button class="search-button" type="submit" aria-label="Pesquisar"></button>
@@ -66,7 +66,7 @@
                                 <a href="/#products" class="menu-link" data-public-nav="products">Produtos</a>
                             </li>
                             <li class="menu-item">
-                                <a href="/#services" class="menu-link" data-public-nav="services">Serviços</a>
+
                             </li>
                             <li class="menu-item">
                                 <a href="/#newsletter" class="menu-link" data-public-nav="contact">Contato</a>
@@ -182,8 +182,6 @@
             setActive("categories");
         } else if (path.startsWith("/produtos")) {
             setActive("products");
-        } else if (path.startsWith("/servicos")) {
-            setActive("services");
         } else if (path === "/") {
             setActive("home");
         }
