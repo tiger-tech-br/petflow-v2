@@ -21,17 +21,23 @@ test("migracoes e consultas nao dependem das tabelas clinicas removidas", () => 
 });
 
 test("conexoes e URLs nunca podem apontar para o banco original", () => {
-    const keys = ["DB_NAME", "DATABASE_URL", "POSTGRES_URL", "DATABASE_PUBLIC_URL"];
+    const keys = ["DB_NAME", "DB_EXPECTED_NAME", "DATABASE_URL", "POSTGRES_URL", "DATABASE_PUBLIC_URL"];
     const saved = Object.fromEntries(keys.map(key => [key, process.env[key]]));
     try {
         keys.forEach(key => delete process.env[key]);
         process.env.DB_NAME = "petflow";
-        assert.throws(buildDbOptions, /banco separado/);
+        assert.throws(buildDbOptions, /nao corresponde/);
         process.env.DB_NAME = "petflow_v2";
         assert.equal(buildDbOptions().database, "petflow_v2");
-        for (const key of keys.slice(1)) {
+        process.env.DB_EXPECTED_NAME = "railway";
+        assert.throws(buildDbOptions, /nao corresponde/);
+        process.env.DATABASE_URL = "postgresql://postgres:senha@postgres.railway.internal:5432/railway";
+        assert.equal(buildDbOptions().connectionString, process.env.DATABASE_URL);
+        delete process.env.DATABASE_URL;
+        delete process.env.DB_EXPECTED_NAME;
+        for (const key of ["DATABASE_URL", "POSTGRES_URL", "DATABASE_PUBLIC_URL"]) {
             process.env[key] = "postgresql://localhost/petflow";
-            assert.throws(buildDbOptions, /banco separado/);
+            assert.throws(buildDbOptions, /nao corresponde/);
             process.env[key] = "postgresql://localhost/petflow_v2";
             assert.equal(buildDbOptions().connectionString, process.env[key]);
             delete process.env[key];

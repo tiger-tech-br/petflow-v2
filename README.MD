@@ -37,6 +37,21 @@ outros bancos são recusados antes da conexão. Nunca aponte esta cópia para
 o banco original. As migrações do banco novo não criam tabelas de pets, serviços, agendamentos,
 consultas, prontuários ou vacinas. Nenhuma tabela de bancos existentes é apagada.
 
+## Railway
+
+Crie um projeto novo para o PetFlow v2 e adicione um serviço PostgreSQL nele.
+No serviço da aplicação, configure `DATABASE_URL` com a referência privada
+`${{Postgres.DATABASE_URL}}` e `DB_EXPECTED_NAME` com
+`${{Postgres.PGDATABASE}}`. Assim a aplicação confirma que a URL aponta para
+o banco criado naquele projeto, mesmo que o Railway use o nome padrão
+`railway` em vez de `petflow_v2`.
+
+Não use `DATABASE_PUBLIC_URL` entre a aplicação e o PostgreSQL. O arquivo
+`railway.json` executa `npm run db:migrate` antes de cada deploy. Ainda é
+necessário definir no Railway `JWT_SECRET`, `JWT_EXPIRES_IN`, `APP_URL`,
+`FRONTEND_URL`, as credenciais de Cloudinary e, quando ativados, Resend e
+PagBank.
+
 ## Verificação
 
 ```sh

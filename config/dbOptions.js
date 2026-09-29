@@ -7,11 +7,16 @@ function buildDbOptions() {
         process.env.DATABASE_PUBLIC_URL;
 
     // Esta copia nunca deve acessar o banco do PetFlow original.
+    // No Railway, DB_EXPECTED_NAME deve referenciar PGDATABASE do Postgres
+    // criado dentro deste projeto.
+    const expectedDatabaseName =
+        process.env.DB_EXPECTED_NAME ||
+        "petflow_v2";
     const databaseName = databaseUrl
         ? decodeURIComponent(new URL(databaseUrl).pathname.slice(1))
         : process.env.DB_NAME;
-    if (databaseName !== "petflow_v2") {
-        throw new Error("PetFlow v2 exige um banco separado chamado petflow_v2. Confira DB_NAME e as URLs de conexao.");
+    if (!databaseName || databaseName !== expectedDatabaseName) {
+        throw new Error("O banco configurado nao corresponde a DB_EXPECTED_NAME. Confira a conexao do PetFlow v2.");
     }
 
     if (databaseUrl) {
