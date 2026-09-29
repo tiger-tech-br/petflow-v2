@@ -48,9 +48,9 @@ o banco criado naquele projeto, mesmo que o Railway use o nome padrão
 
 Não use `DATABASE_PUBLIC_URL` entre a aplicação e o PostgreSQL. O arquivo
 `railway.json` executa `npm run db:migrate` antes de cada deploy. Ainda é
-necessário definir no Railway `JWT_SECRET`, `JWT_EXPIRES_IN`, `APP_URL`,
-`FRONTEND_URL`, as credenciais de Cloudinary e, quando ativados, Resend e
-PagBank.
+necessário definir no Railway `JWT_SECRET`, `JWT_EXPIRES_IN`, `APP_URL` e
+`FRONTEND_URL`. Cloudinary é necessário apenas para upload de imagens; Resend
+e PagBank são necessários quando e-mail e pagamentos forem ativados.
 
 ## Verificação
 
