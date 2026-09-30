@@ -12,7 +12,7 @@ const {
 function assertConfigured() {
     if (!PAGSEGURO_BASE_URL || !PAGSEGURO_TOKEN) {
         const error = new Error(
-            "PagSeguro/PagBank não configurado no .env."
+            "O pagamento online está temporariamente indisponível. Tente novamente mais tarde."
         );
 
         error.status = 503;
@@ -105,10 +105,9 @@ function buildCheckoutPayload(pedido) {
         })),
         customer: buildCustomer(cliente),
         shipping: {
-            type: "FIXED",
-            service_type: "PAC",
-            amount: 0,
-            address: buildAddress(cliente),
+            type: Number(pedido.valor_frete || 0) > 0 ? "FIXED" : "FREE",
+            ...(Number(pedido.valor_frete || 0) > 0 ? { amount: toCents(pedido.valor_frete) } : {}),
+            address: buildAddress(pedido.endereco_entrega || cliente),
             address_modifiable: false
         }
     };
@@ -168,7 +167,7 @@ function normalizarCheckout(data) {
         checkoutId: data?.id || null,
         orderId: data?.order_id || data?.reference_id || null,
         chargeId: charge?.id || null,
-        status: data?.status || charge?.status || null,
+        status: charge?.status || data?.status || null,
         paymentMethod: mapPaymentMethod(
             charge?.payment_method?.type ||
             data?.payment_method?.type
@@ -191,8 +190,8 @@ function extrairEventoWebhook(body) {
         body?.charges?.[0]?.id;
 
     const pagseguroStatus =
-        body?.status ||
         body?.charges?.[0]?.status ||
+        body?.status ||
         body?.payment_status ||
         body?.paymentStatus ||
         null;
@@ -246,7 +245,6 @@ function mapStatusToVenda(status) {
         [
             "PAID",
             "AVAILABLE",
-            "AUTHORIZED",
             "APPROVED",
             "PAGAMENTO_APROVADO"
         ].includes(normalized)
@@ -261,7 +259,8 @@ function mapStatusToVenda(status) {
             "DECLINED",
             "REFUNDED",
             "CHARGEBACK",
-            "CANCELADA"
+            "CANCELADA",
+            "EXPIRED"
         ].includes(normalized)
     ) {
         return "CANCELADA";
@@ -358,6 +357,7 @@ function friendlyPagSeguroMessage(message) {
 }
 
 module.exports = {
+    assertConfigured,
     criarCheckout,
     consultarCheckout,
     extrairEventoWebhook,

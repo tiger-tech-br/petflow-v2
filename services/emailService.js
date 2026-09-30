@@ -6,17 +6,35 @@ const {
     APP_URL
 } = require("../config/env");
 
-async function sendEmail({ to, subject, html, text }) {
+function assertEmailConfigured() {
     if (!RESEND_API_KEY) {
-        throw new Error("RESEND_API_KEY não configurada no .env.");
+        throw emailError("missing_api_key");
     }
+    if (!EMAIL_FROM) throw emailError("missing_sender");
+}
 
-    const response = await fetch("https://api.resend.com/emails", {
+function emailError(code, providerStatus) {
+    const error = new Error("Não foi possível enviar o e-mail. Tente novamente em alguns minutos.");
+    error.status = 503;
+    error.code = code;
+    // Never log the request, recipient, token, API key or provider's raw body.
+    console.error("[email] falha no Resend", { code, providerStatus });
+    return error;
+}
+
+async function sendEmail({ to, subject, html, text, idempotencyKey }) {
+    assertEmailConfigured();
+
+    let response;
+    try {
+        response = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: {
             Authorization: `Bearer ${RESEND_API_KEY}`,
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {})
         },
+        signal: AbortSignal.timeout(10000),
         body: JSON.stringify({
             from: EMAIL_FROM,
             to,
@@ -24,14 +42,26 @@ async function sendEmail({ to, subject, html, text }) {
             html,
             text
         })
-    });
-
-    const payload = await response.json();
-
-    if (!response.ok) {
-        throw new Error(payload.message || "Não foi possível enviar o e-mail.");
+        });
+    } catch (error) {
+        throw emailError(["TimeoutError", "AbortError"].includes(error.name) ? "timeout" : "network_error");
     }
 
+    const payload = await response.json().catch(() => null);
+
+    if (!response.ok) {
+        const message = String(payload?.message || "").toLowerCase();
+        let code = `http_${response.status}`;
+        if (response.status === 401) code = "invalid_api_key";
+        else if (response.status === 403) {
+            code = message.includes("testing emails") ? "test_sender_restricted"
+                : message.includes("not verified") ? "domain_not_verified" : "sender_not_authorized";
+        } else if (response.status === 429) code = "rate_or_quota_limit";
+        throw emailError(code, response.status);
+    }
+
+    if (typeof payload?.id !== "string" || !payload.id) throw emailError("invalid_provider_response", response.status);
+    console.info("[email] aceito pelo Resend", { id: payload.id });
     return payload;
 }
 
@@ -241,6 +271,7 @@ function escapeHtml(value) {
 }
 
 module.exports = {
+    assertEmailConfigured,
     sendEmail,
     sendOptionalEmail,
     welcomeTemplate,

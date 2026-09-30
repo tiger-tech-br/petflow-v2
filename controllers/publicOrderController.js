@@ -6,6 +6,8 @@
 
 const db = require("../database/connection");
 const VendaService = require("../services/vendaService");
+const pagseguroService = require("../services/pagseguroService");
+const freteService = require("../services/freteService");
 
 const {
     sendOptionalEmail,
@@ -171,6 +173,8 @@ async function criarPedido(request, response, next) {
            O preço verdadeiro será consultado no banco.
         ========================================== */
 
+        pagseguroService.assertConfigured();
+        const frete = freteService.verifyQuote(body.freteToken, cliente);
         const pedido = await VendaService.finalizarVenda(
             empresaId,
             {
@@ -185,6 +189,9 @@ async function criarPedido(request, response, next) {
                 desconto: 0,
 
                 acrescimo: 0,
+                valor_frete: frete.valor,
+                distancia_entrega_m: frete.distanciaMetros,
+                endereco_entrega: frete.endereco,
 
                 observacoes: montarObservacoes(
                     cliente,

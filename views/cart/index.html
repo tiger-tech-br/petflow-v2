@@ -36,16 +36,29 @@
             <aside class="cart-summary" aria-labelledby="summaryTitle">
                 <h2 id="summaryTitle">Resumo</h2>
                 <div class="customer-card" id="cartCustomer"></div>
+                <section class="shipping-box" aria-label="Frete de entrega">
+                    <strong>Frete para este endereço</strong>
+                    <p>Até 1 km grátis. Depois, R$ 3 por km adicional ou fração.</p>
+                    <button class="btn-secondary" id="calculateShipping" type="button" disabled>Calcular frete</button>
+                    <p id="shippingStatus" role="status">Entre e complete seu endereço para calcular.</p>
+                    <small>Distância pelas ruas · Google Maps</small>
+                </section>
                 <form class="cart-form" id="cartForm">
                     <label>
                         Observações
                         <textarea class="form-control" name="observacoes" placeholder="Ex: entregar à tarde"></textarea>
                     </label>
                     <div class="cart-total">
+                        <span>Produtos</span><strong id="cartSubtotal">R$ 0,00</strong>
+                    </div>
+                    <div class="cart-total">
+                        <span>Frete</span><strong id="cartShipping">A calcular</strong>
+                    </div>
+                    <div class="cart-total">
                         <span>Total</span>
                         <strong id="cartTotal">R$ 0,00</strong>
                     </div>
-                    <button class="btn btn-primary" type="submit">Finalizar pedido</button>
+                    <button class="btn btn-primary" type="submit" disabled>Ir para pagamento</button>
                     <p class="cart-status" id="cartStatus" role="status"></p>
                 </form>
             </aside>

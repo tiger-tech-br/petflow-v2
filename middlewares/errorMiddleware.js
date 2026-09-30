@@ -8,7 +8,8 @@ function errorMiddleware(error, request, response, next) {
 
     console.error(error);
 
-    const status = error.status || 500;
+    const candidate = error.status || error.statusCode;
+    const status = Number.isInteger(candidate) && candidate >= 400 && candidate <= 599 ? candidate : 500;
 
     const message = error.message || "Erro interno do servidor.";
 

@@ -622,16 +622,7 @@ function injectCheckoutModal() {
     `);
 }
 function openCheckoutModal() {
-    const overlay = document.querySelector(".checkout-overlay");
-
-    if (!overlay) {
-        return;
-    }
-
-    renderCheckoutItems();
-    renderCheckoutCustomer();
-    overlay.hidden = false;
-    document.body.classList.add("checkout-open");
+    window.location.assign("/sacola");
 }
 
 function closeCheckoutModal() {

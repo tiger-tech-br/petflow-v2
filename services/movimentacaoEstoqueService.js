@@ -94,58 +94,19 @@ const MovimentacaoEstoqueService = {
     ============================================== */
 
     async saida(empresaId, produtoId, quantidade, client = db) {
-
         quantidade = Number(quantidade);
-
-        if (quantidade <= 0) {
-
-            throw new Error("Quantidade inválida.");
-
+        if (!Number.isInteger(quantidade) || quantidade <= 0) throw new Error("Quantidade inválida.");
+        const { rows } = await client.query(`
+            UPDATE estoque SET quantidade = quantidade - $1, updated_at = CURRENT_TIMESTAMP
+            WHERE empresa_id = $2 AND produto_id = $3 AND quantidade >= $1
+            RETURNING *
+        `, [quantidade, empresaId, produtoId]);
+        if (!rows[0]) {
+            const error = new Error("Estoque insuficiente para concluir o pedido.");
+            error.status = 409;
+            throw error;
         }
-
-        const estoque = await this.consultar(
-
-            empresaId,
-            produtoId,
-            client
-
-        );
-
-        if (!estoque) {
-
-            throw new Error("Produto não encontrado no estoque.");
-
-        }
-
-        if (Number(estoque.quantidade) < quantidade) {
-
-            throw new Error("Estoque insuficiente.");
-
-        }
-
-        const query = `
-            UPDATE estoque
-            SET
-
-                quantidade = quantidade - $1,
-                updated_at = CURRENT_TIMESTAMP
-
-            WHERE empresa_id = $2
-            AND produto_id = $3
-
-            RETURNING *;
-        `;
-
-        const { rows } = await client.query(query, [
-
-            quantidade,
-            empresaId,
-            produtoId
-
-        ]);
-
         return rows[0];
-
     },
 
     /* ==============================================

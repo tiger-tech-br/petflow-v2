@@ -975,7 +975,7 @@
     function renderSaleDetails(container, sale) {
         const customer = sale?.cliente || {};
         const items = Array.isArray(sale?.itens) ? sale.itens : [];
-        const address = formatCustomerAddress(customer);
+        const address = formatCustomerAddress(sale?.endereco_entrega || customer);
         const currentStatus = sale?.status || "";
 
         container.innerHTML = `
@@ -1017,6 +1017,14 @@
                         ${escapeHtml(formatAdminDate(sale?.data_venda))}
                     </span>
                 </div>
+
+                ${currentStatus === "SAIU_PARA_ENTREGA" ? `<div class="form-group">
+                    <label>GPS da entrega</label>
+                    <button class="btn" type="button" id="createDriverLink">Gerar link para o entregador</button>
+                    <p>O link vale por 12 horas. Gerar outro invalida o anterior. Envie apenas ao entregador deste pedido.</p>
+                    <input class="form-control" id="driverLink" aria-label="Link do entregador" readonly hidden>
+                    <span id="driverLinkStatus" role="status"></span>
+                </div>` : ""}
 
                 <div class="form-group">
                     <label>Cliente</label>
@@ -1107,6 +1115,7 @@
                         Acréscimo:
                         ${formatAdminCurrency(sale?.acrescimo)}
                     </span>
+                    <span>Frete: ${formatAdminCurrency(sale?.valor_frete || 0)}</span>
 
                     <strong>
                         Total final:
@@ -1135,6 +1144,19 @@
                 </div>
             </section>
         `;
+        container.querySelector("#createDriverLink")?.addEventListener("click", async event => {
+            const button = event.currentTarget;
+            const status = container.querySelector("#driverLinkStatus");
+            button.disabled = true;
+            try {
+                const payload = await apiPost(`/vendas/${sale.id}/rastreamento`, {});
+                const input = container.querySelector("#driverLink");
+                input.value = payload.data.url; input.hidden = false;
+                input.focus(); input.select();
+                status.textContent = "Link pronto. Copie e envie ao entregador. Ele deve abrir no celular e tocar em Iniciar compartilhamento.";
+            } catch (error) { status.textContent = error.message; }
+            finally { button.disabled = false; }
+        });
     }
 
     function buildSaleStatusOptions(currentStatus) {

@@ -12,15 +12,19 @@ const {
 
 const {
     sendEmail,
+    assertEmailConfigured,
     emailVerificationTemplate,
     passwordResetTemplate
 } = require("../services/emailService");
 
 async function register(request, response, next) {
 
+    let client;
+    let committed = false;
     try {
 
-        const data = request.body;
+        const data = request.body || {};
+        if (typeof data.email === "string") data.email = data.email.trim().toLowerCase();
 
         if (!hasRequiredRegistrationData(data)) {
 
@@ -30,6 +34,10 @@ async function register(request, response, next) {
             });
 
         }
+
+        assertEmailConfigured();
+        client = await db.connect();
+        await client.query("BEGIN");
 
         const senhaHash = await bcrypt.hash(
             data.senha,
@@ -44,13 +52,13 @@ async function register(request, response, next) {
             Date.now() + 1000 * 60 * 60 * 24
         );
 
-        const empresaIdResult = await db.query(
+        const empresaIdResult = await client.query(
             "SELECT get_petflow_empresa_id() AS id"
         );
 
         const empresaId = empresaIdResult.rows[0].id;
 
-        const existing = await db.query(
+        const existing = await client.query(
             `
                 SELECT
                     c.id,
@@ -133,7 +141,7 @@ async function register(request, response, next) {
 
         if (clienteId) {
 
-            await db.query(
+            await client.query(
                 `
                     UPDATE clientes
                     SET
@@ -170,7 +178,7 @@ async function register(request, response, next) {
 
         } else {
 
-            const created = await db.query(
+            const created = await client.query(
                 `
                     INSERT INTO clientes (
                         empresa_id,
@@ -229,7 +237,7 @@ async function register(request, response, next) {
 
         }
 
-        await db.query(
+        await client.query(
             `
                 INSERT INTO usuarios_clientes (
                     cliente_id,
@@ -261,7 +269,8 @@ async function register(request, response, next) {
 
         const profile = await getProfileById(
             clienteId,
-            empresaId
+            empresaId,
+            client
         );
 
         await createCustomerNotification({
@@ -269,7 +278,7 @@ async function register(request, response, next) {
             titulo: "Bem-vindo à PetFlow",
             mensagem: `${firstName(profile.nome)}, seu cadastro foi criado com sucesso. Agora você pode comprar, favoritar produtos e acompanhar seus pedidos.`,
             tipo: "SISTEMA"
-        });
+        }, client);
 
         const verificationUrl = `${APP_URL}/login?verificar_email=${verificationToken}`;
 
@@ -282,8 +291,12 @@ async function register(request, response, next) {
             to: profile.email,
             subject: template.subject,
             html: template.html,
-            text: template.text
+            text: template.text,
+            idempotencyKey: `verification/${verificationToken}`
         });
+
+        await client.query("COMMIT");
+        committed = true;
 
         return response.status(201).json({
             success: true,
@@ -292,8 +305,17 @@ async function register(request, response, next) {
 
     } catch (error) {
 
+        if (error.code === "23505") {
+            error.status = 409;
+            error.message = "Já existe um cadastro com esses dados. Entre ou reenvie a confirmação de e-mail.";
+        }
         return next(error);
 
+    } finally {
+        if (client) {
+            try { if (!committed) await client.query("ROLLBACK"); }
+            finally { client.release(); }
+        }
     }
 
 }
@@ -500,6 +522,35 @@ async function forgotPassword(request, response, next) {
 
     }
 
+}
+
+async function resendVerification(request, response, next) {
+    try {
+        const email = String(request.body?.email || "").trim().toLowerCase();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            return response.status(400).json({ success: false, message: "Informe um e-mail válido." });
+        }
+        assertEmailConfigured();
+        await db.transaction(async client => {
+            const { rows } = await client.query(`
+                SELECT uc.cliente_id, uc.token_verificacao_email, uc.token_verificacao_expiracao, c.nome
+                FROM usuarios_clientes uc JOIN clientes c ON c.id = uc.cliente_id
+                WHERE LOWER(uc.email) = $1 AND NOT uc.email_verificado
+                  AND uc.ativo = TRUE AND c.ativo = TRUE
+                FOR UPDATE OF uc
+            `, [email]);
+            if (!rows[0]) return;
+            const account = rows[0];
+            const token = account.token_verificacao_email && new Date(account.token_verificacao_expiracao) > new Date()
+                ? account.token_verificacao_email : crypto.randomBytes(32).toString("hex");
+            await client.query(`UPDATE usuarios_clientes
+                SET token_verificacao_email = $1, token_verificacao_expiracao = NOW() + INTERVAL '24 hours'
+                WHERE cliente_id = $2`, [token, account.cliente_id]);
+            const template = emailVerificationTemplate({ name: account.nome, verifyUrl: `${APP_URL}/login?verificar_email=${token}` });
+            await sendEmail({ to: email, ...template, idempotencyKey: `verification-resend/${token}/${Math.floor(Date.now() / 900000)}` });
+        });
+        return response.json({ success: true, message: "Se houver uma conta aguardando confirmação, enviaremos o link para esse e-mail." });
+    } catch (error) { return next(error); }
 }
 
 async function verifyEmail(request, response, next) {
@@ -908,7 +959,9 @@ async function orders(request, response, next) {
                     v.pagseguro_status,
                     v.pagamento_atualizado_em,
                     v.valor_total,
-                    v.valor_final,
+                      v.valor_final,
+                      v.valor_frete,
+                      v.endereco_entrega,
                     v.data_venda,
                     v.observacoes,
                     c.endereco,
@@ -1082,9 +1135,9 @@ async function markNotificationRead(request, response, next) {
 
 }
 
-async function getProfileById(id, empresaId) {
+async function getProfileById(id, empresaId, executor = db) {
 
-    const { rows } = await db.query(
+    const { rows } = await executor.query(
         `
             SELECT
                 id,
@@ -1191,7 +1244,11 @@ function hasRequiredRegistrationData(data) {
 
     return Boolean(
         hasRequiredProfileData(data) &&
-        hasText(data.email) &&
+        typeof data.email === "string" &&
+        /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email) &&
+        data.email.length <= 150 &&
+        typeof data.senha === "string" &&
+        Buffer.byteLength(data.senha, "utf8") <= 72 &&
         hasText(data.senha) &&
         String(data.senha).length >= 6
     );
@@ -1338,16 +1395,16 @@ function duplicateCustomerMessage(field) {
         cpf: "Esse CPF já está cadastrado.",
         telefone: "Esse telefone já está cadastrado.",
         whatsapp: "Esse celular já está cadastrado.",
-        email: "Esse e-mail já está cadastrado."
+        email: "Esse e-mail já está cadastrado. Entre ou use Reenviar confirmação de e-mail."
     };
 
     return messages[field] || messages.email;
 
 }
 
-async function createCustomerNotification({ clienteId, titulo, mensagem, tipo }) {
+async function createCustomerNotification({ clienteId, titulo, mensagem, tipo }, executor = db) {
 
-    await db.query(
+    await executor.query(
         `
             INSERT INTO notificacoes (
                 cliente_id,
@@ -1382,6 +1439,7 @@ module.exports = {
     login,
     forgotPassword,
     verifyEmail,
+    resendVerification,
     resetPassword,
     me,
     update,

@@ -24,7 +24,7 @@ const storage = new CloudinaryStorage({
 
     params: async (request, file) => ({
 
-        folder: "petflow",
+        folder: "petflow-v2",
 
         resource_type: "image",
 
@@ -90,7 +90,7 @@ const upload = multer({
 
     limits: {
 
-        fileSize: Number(process.env.MAX_FILE_SIZE)
+        fileSize: Number(process.env.MAX_FILE_SIZE) || 5 * 1024 * 1024
 
     }
 

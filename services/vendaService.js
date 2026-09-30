@@ -71,6 +71,8 @@ const VendaService = {
 
         const desconto = Number(venda.desconto ?? 0);
         const acrescimo = Number(venda.acrescimo ?? 0);
+        const valorFrete = Number(venda.valor_frete ?? 0);
+        if (!Number.isFinite(valorFrete) || valorFrete < 0) throw new Error("Frete inválido.");
 
         if (
             !Number.isFinite(desconto) ||
@@ -120,6 +122,9 @@ const VendaService = {
                     desconto,
 
                     acrescimo,
+                    valor_frete: valorFrete,
+                    distancia_entrega_m: venda.distancia_entrega_m,
+                    endereco_entrega: venda.endereco_entrega,
 
                     observacoes:
                         venda.observacoes ?? null,
@@ -250,7 +255,7 @@ const VendaService = {
             const valorFinal =
                 valorTotalBruto -
                 desconto +
-                acrescimo;
+                acrescimo + valorFrete;
 
             if (valorFinal < 0) {
                 throw new Error(
@@ -328,12 +333,12 @@ const VendaService = {
 
             let shouldNotifyPayment = false;
 
-            if (venda.status === "PAGAMENTO_APROVADO") {
+            if (venda.estoque_baixado_em || ["PAGAMENTO_APROVADO", "EM_SEPARACAO", "SAIU_PARA_ENTREGA", "ENTREGUE", "FINALIZADA"].includes(venda.status)) {
                 await VendaModel.atualizarPagamentoPorReferencia(
                     referencia,
                     {
-                        status: "PAGAMENTO_APROVADO",
-                        ...dadosPagamento
+                        ...dadosPagamento,
+                        status: venda.status
                     },
                     client
                 );
@@ -369,6 +374,7 @@ const VendaService = {
                     client
                 );
 
+            await client.query("UPDATE vendas SET estoque_baixado_em = NOW() WHERE id = $1", [venda.id]);
             await gerarFinanceiroSeNaoExistir(
                 venda.empresa_id,
                 vendaAtualizada || venda,

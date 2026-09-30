@@ -5,6 +5,8 @@ const CART_API = "/api/public";
 let cartProducts = [];
 let cart = readCart();
 let customer = null;
+let shippingQuote = null;
+let submitting = false;
 
 document.addEventListener("DOMContentLoaded", () => {
     setupCartPage();
@@ -12,6 +14,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 document.addEventListener("petflow:customer-logout", async () => {
     cart = {};
+    shippingQuote = null;
     persistCart();
     renderCart();
     await renderCustomer();
@@ -36,6 +39,7 @@ async function setupCartPage() {
 }
 
 function setupCartEvents() {
+    document.getElementById("calculateShipping")?.addEventListener("click", calculateShipping);
     document.addEventListener("input", event => {
         const input = event.target.closest("[data-cart-quantity]");
 
@@ -74,7 +78,7 @@ function renderCart() {
 
     if (!items.length) {
         renderEmpty("Sua sacola está vazia.");
-        total.textContent = currency(0);
+        renderTotals();
         return;
     }
 
@@ -96,7 +100,32 @@ function renderCart() {
         `;
     }).join("");
 
-    total.textContent = currency(getCartTotal(items));
+    renderTotals();
+}
+
+function renderTotals() {
+    const subtotal = getCartTotal(getCartItems());
+    document.getElementById("cartSubtotal").textContent = currency(subtotal);
+    document.getElementById("cartShipping").textContent = shippingQuote ? currency(shippingQuote.valor) : "A calcular";
+    document.getElementById("cartTotal").textContent = shippingQuote ? currency(subtotal + shippingQuote.valor) : `${currency(subtotal)} + frete`;
+    document.querySelector("#cartForm button[type='submit']").disabled = submitting || !shippingQuote || !getCartItems().length;
+}
+
+async function calculateShipping() {
+    const button = document.getElementById("calculateShipping");
+    const status = document.getElementById("shippingStatus");
+    shippingQuote = null;
+    renderTotals();
+    button.disabled = true;
+    status.textContent = "Calculando o trajeto até seu endereço...";
+    try {
+        const response = await fetch(`${CART_API}/frete/cotar`, { method: "POST", headers: { Authorization: `Bearer ${getToken()}` } });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.message || "Não foi possível calcular o frete.");
+        shippingQuote = payload.data;
+        status.textContent = `${(shippingQuote.distanciaMetros / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 3 })} km pelas ruas — ${currency(shippingQuote.valor)}. Cotação válida por 15 minutos.`;
+    } catch (error) { status.textContent = error.message; }
+    finally { button.disabled = false; renderTotals(); }
 }
 
 function renderEmpty(message) {
@@ -117,6 +146,9 @@ function renderEmpty(message) {
 }
 
 async function renderCustomer() {
+    shippingQuote = null;
+    customer = null;
+    document.getElementById("calculateShipping").disabled = true;
     const container = document.getElementById("cartCustomer");
     const submit = document.querySelector("#cartForm button[type='submit']");
     const token = getToken();
@@ -142,7 +174,9 @@ async function renderCustomer() {
         const addressComplete = hasDeliveryAddress(customer);
         const contact = [customer.telefone, customer.email].filter(Boolean).join(" - ");
 
-        submit.disabled = !addressComplete;
+        submit.disabled = true;
+        document.getElementById("calculateShipping").disabled = !addressComplete;
+        document.getElementById("shippingStatus").textContent = addressComplete ? "Calcule o frete antes de pagar." : "Complete o endereço e o CEP em Minha conta.";
         container.innerHTML = `
             <div class="customer-card-inner ${addressComplete ? "" : "is-warning"}">
                 <div>
@@ -186,6 +220,7 @@ function clearCartSession() {
 
 async function submitOrder(event) {
     event.preventDefault();
+    if (submitting) return;
 
     const status = document.getElementById("cartStatus");
     const token = getToken();
@@ -208,6 +243,14 @@ async function submitOrder(event) {
         return;
     }
 
+    if (!shippingQuote || new Date(shippingQuote.expiraEm) <= new Date()) {
+        shippingQuote = null;
+        renderTotals();
+        setStatus(status, "Calcule novamente o frete antes de pagar.");
+        return;
+    }
+    submitting = true;
+    renderTotals();
     const data = Object.fromEntries(new FormData(event.target).entries());
     setStatus(status, "Finalizando pedido...");
 
@@ -220,6 +263,7 @@ async function submitOrder(event) {
             },
             body: JSON.stringify({
                 formaPagamento: "PAGBANK",
+                freteToken: shippingQuote.token,
                 observacoes: data.observacoes,
                 itens: items.map(({ product, quantity }) => ({
                     produto_id: product.id,
@@ -231,6 +275,7 @@ async function submitOrder(event) {
         const payload = await response.json();
 
         if (!response.ok) {
+            if (response.status === 409) shippingQuote = null;
             throw new Error(payload.message || "Não foi possível finalizar o pedido.");
         }
 
@@ -248,6 +293,9 @@ async function submitOrder(event) {
         );
     } catch (error) {
         setStatus(status, error.message || "Não foi possível finalizar o pedido.");
+    } finally {
+        submitting = false;
+        renderTotals();
     }
 }
 
@@ -354,7 +402,7 @@ function getToken() {
 }
 
 function hasDeliveryAddress(data) {
-    return Boolean(data?.endereco && data?.numero && data?.bairro && data?.cidade && data?.estado);
+    return Boolean(data?.endereco && data?.numero && data?.bairro && data?.cidade && data?.estado && data?.cep);
 }
 
 function formatAddress(data) {

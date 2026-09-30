@@ -216,7 +216,9 @@ BEGIN
     NEW.desconto := COALESCE(NEW.desconto, 0);
     NEW.acrescimo := COALESCE(NEW.acrescimo, 0);
     NEW.valor_total := COALESCE(NEW.valor_total, 0);
-    NEW.valor_final := NEW.valor_total - NEW.desconto + NEW.acrescimo;
+    -- Compatível antes e depois da migração de frete; scripts são reaplicados no deploy.
+    NEW.valor_final := NEW.valor_total - NEW.desconto + NEW.acrescimo
+        + COALESCE((to_jsonb(NEW)->>'valor_frete')::NUMERIC, 0);
     RETURN NEW;
 END;
 $$;

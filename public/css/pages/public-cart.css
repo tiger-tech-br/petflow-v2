@@ -374,3 +374,6 @@ textarea.form-control {
         width: min(100% - 20px, 1180px);
     }
 }
+.shipping-box { padding: 16px; border: 1px solid #cde6df; background: #f2faf7; border-radius: 12px; margin: 16px 0; }
+.shipping-box p { line-height: 1.5; margin: 10px 0; }
+.shipping-box small { color: #52645f; }

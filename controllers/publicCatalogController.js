@@ -17,8 +17,8 @@ async function produtos(request, response, next) {
             LEFT JOIN categorias c
                 ON c.id = p.categoria_id
             WHERE COALESCE(p.status, p.ativo, TRUE) = TRUE
-            ORDER BY p.nome ASC
-            LIMIT 12;
+              AND p.empresa_id = get_petflow_empresa_id()
+            ORDER BY p.nome ASC;
         `);
 
         return response.status(200).json({
@@ -39,6 +39,7 @@ async function categorias(request, response, next) {
                 descricao
             FROM categorias
             WHERE COALESCE(status, ativo, TRUE) = TRUE
+              AND empresa_id = get_petflow_empresa_id()
             ORDER BY nome ASC;
         `);
 

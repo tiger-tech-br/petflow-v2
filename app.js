@@ -124,6 +124,12 @@ app.get("/login", (request, response) => {
 
 });
 
+app.get("/login-admin", (request, response) => {
+
+    response.redirect("/admin/");
+
+});
+
 app.get("/redefinir-senha", (request, response) => {
 
     response.sendFile(path.join(__dirname, "views", "auth", "reset-password.html"));
@@ -148,6 +154,14 @@ app.get("/sacola", (request, response) => {
 
     response.sendFile(path.join(__dirname, "views", "cart", "index.html"));
 
+});
+
+app.get("/entregador", (request, response) => {
+    response.set("Cache-Control", "no-store");
+    response.sendFile(path.join(__dirname, "views", "delivery", "driver.html"));
+});
+app.get("/acompanhar-entrega", (request, response) => {
+    response.sendFile(path.join(__dirname, "views", "delivery", "tracking.html"));
 });
 
 app.get("/politica-de-privacidade", (request, response) => {

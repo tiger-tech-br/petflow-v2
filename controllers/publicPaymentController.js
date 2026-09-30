@@ -1,5 +1,6 @@
 "use strict";
 
+const db = require("../database/connection");
 const VendaModel = require("../models/vendaModel");
 const VendaService = require("../services/vendaService");
 const pagseguroService = require("../services/pagseguroService");
@@ -7,81 +8,34 @@ const pagseguroService = require("../services/pagseguroService");
 async function criarPagamento(request, response, next) {
     try {
         const customer = getAuthenticatedCustomer(request);
-        const vendaId =
-            request.body?.vendaId ||
-            request.body?.venda_id ||
-            request.body?.pedidoId ||
-            request.body?.pedido_id;
-
-        if (!customer) {
-            return response.status(401).json({
-                success: false,
-                message: "Faça login para iniciar o pagamento."
-            });
-        }
-
-        if (!vendaId) {
-            return response.status(400).json({
-                success: false,
-                message: "Informe o pedido para pagamento."
-            });
-        }
-
-        const pedido = await VendaModel.buscarPorIdDoCliente(
-            vendaId,
-            customer.id,
-            customer.empresaId
-        );
-
-        if (!pedido) {
-            return response.status(404).json({
-                success: false,
-                message: "Pedido não encontrado."
-            });
-        }
-
-        if (pedido.status !== "AGUARDANDO_PAGAMENTO") {
-            return response.status(409).json({
-                success: false,
-                message: "Este pedido não está aguardando pagamento."
-            });
-        }
-
-        if (pedido.pagseguro_checkout_url) {
-            return response.status(200).json({
-                success: true,
-                message: "Pagamento já iniciado.",
-                payment: buildPaymentResponse(pedido)
-            });
-        }
-
-        const checkout = await pagseguroService.criarCheckout(pedido);
-
-        const vendaAtualizada =
-            await VendaModel.registrarPagamentoPagSeguro(
-                pedido.id,
-                customer.empresaId,
-                {
-                    pagseguroCheckoutId: checkout.checkoutId,
-                    pagseguroOrderId: checkout.orderId,
-                    pagseguroChargeId: checkout.chargeId,
-                    pagseguroStatus: checkout.status,
-                    pagseguroCheckoutUrl: checkout.checkoutUrl,
-                    pagseguroQrCode: checkout.qrCode,
-                    pagseguroQrCodeText: checkout.qrCodeText,
-                    pagseguroResponse: checkout.raw,
-                    formaPagamento: checkout.paymentMethod
-                }
-            );
-
-        return response.status(201).json({
-            success: true,
-            message: "Pagamento iniciado com sucesso.",
-            payment: buildPaymentResponse(vendaAtualizada)
+        const vendaId = request.body?.vendaId || request.body?.venda_id || request.body?.pedidoId || request.body?.pedido_id;
+        if (!customer) return response.status(401).json({ success: false, message: "Faça login para iniciar o pagamento." });
+        if (!vendaId) return response.status(400).json({ success: false, message: "Informe o pedido para pagamento." });
+        pagseguroService.assertConfigured();
+        const result = await db.transaction(async client => {
+            // Serializa cliques repetidos e solicitações concorrentes para o mesmo pedido.
+            const { rows } = await client.query("SELECT id FROM vendas WHERE id = $1 AND cliente_id = $2 AND empresa_id = $3 FOR UPDATE", [vendaId, customer.id, customer.empresaId]);
+            if (!rows[0]) return { status: 404, body: { success: false, message: "Pedido não encontrado." } };
+            const pedido = await VendaModel.buscarPorIdDoCliente(vendaId, customer.id, customer.empresaId);
+            if (pedido.status !== "AGUARDANDO_PAGAMENTO") return { status: 409, body: { success: false, message: "Este pedido não está aguardando pagamento." } };
+            if (pedido.pagseguro_checkout_url) return { status: 200, body: { success: true, payment: buildPaymentResponse(pedido) } };
+            const checkout = await pagseguroService.criarCheckout(pedido);
+            if (!checkout.checkoutId || !checkout.checkoutUrl) {
+                const error = new Error("O provedor não retornou um link de pagamento. Tente novamente.");
+                error.status = 502;
+                throw error;
+            }
+            const updated = await VendaModel.registrarPagamentoPagSeguro(pedido.id, customer.empresaId, {
+                pagseguroCheckoutId: checkout.checkoutId, pagseguroOrderId: checkout.orderId,
+                pagseguroChargeId: checkout.chargeId, pagseguroStatus: checkout.status,
+                pagseguroCheckoutUrl: checkout.checkoutUrl, pagseguroQrCode: checkout.qrCode,
+                pagseguroQrCodeText: checkout.qrCodeText, pagseguroResponse: checkout.raw,
+                formaPagamento: checkout.paymentMethod
+            }, client);
+            return { status: 201, body: { success: true, message: "Pagamento iniciado com sucesso.", payment: buildPaymentResponse(updated) } };
         });
-    } catch (error) {
-        return next(error);
-    }
+        return response.status(result.status).json(result.body);
+    } catch (error) { return next(error); }
 }
 
 async function consultarPagamento(request, response, next) {

@@ -33,6 +33,6 @@
 
 /* Pages */
 @import url("../pages/dashboard/dashboard.css");
-@import url("../pages/dashboard-widgets.css");
+@import url("../pages/dashboard/dashboard-widgets.css");
 @import url("../pages/clientes/clientes.css");
 @import url("../pages/clientes/cadastrar.css");

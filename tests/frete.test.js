@@ -1,0 +1,49 @@
+"use strict";
+const { test, afterEach } = require("node:test");
+const assert = require("node:assert/strict");
+const crypto = require("node:crypto");
+const jwt = require("jsonwebtoken");
+require.cache[require.resolve("../config/env")] = { exports: { JWT_SECRET: "shipping-unit-test" } };
+const shipping = require("../services/freteService");
+const customer = { id: "customer-1", endereco: "Rua Exemplo", numero: "10", bairro: "Centro", cidade: "Santo André", estado: "SP", cep: "09000000" };
+const originalFetch = global.fetch;
+afterEach(() => { global.fetch = originalFetch; delete process.env.GOOGLE_MAPS_API_KEY; });
+test("tarifa inclui 1 km grátis e cobra frações do km adicional", () => {
+    for (const [meters, value] of [[0,0],[999,0],[1000,0],[1001,3],[1500,3],[2000,3],[2001,6],[2500,6],[3000,6]]) {
+        assert.equal(shipping.priceForDistance(meters), value);
+    }
+    for (const meters of [-1,NaN,Infinity,"1000",1.5]) assert.throws(() => shipping.priceForDistance(meters));
+});
+test("cotação usa endereço salvo e Routes API; assinatura vincula cliente e endereço", async () => {
+    process.env.GOOGLE_MAPS_API_KEY = "test-key";
+    global.fetch = async (url, options) => {
+        assert.equal(url, "https://routes.googleapis.com/directions/v2:computeRoutes");
+        assert.equal(options.headers["X-Goog-Api-Key"], "test-key");
+        assert.equal(options.headers["X-Goog-FieldMask"], "routes.distanceMeters");
+        assert.match(JSON.parse(options.body).origin.address, /Novo Horizonte, 123/);
+        assert.match(JSON.parse(options.body).destination.address, /Rua Exemplo, 10/);
+        return { ok: true, json: async () => ({ routes: [{ distanceMeters: 1500 }] }) };
+    };
+    const quote = await shipping.quote(customer);
+    assert.equal(quote.valor,3);
+    assert.equal(shipping.verifyQuote(quote.token,customer).valor,3);
+    assert.throws(() => shipping.verifyQuote(quote.token,{ ...customer, id: "other" }), { status: 409 });
+    assert.throws(() => shipping.verifyQuote(quote.token,{ ...customer, numero: "11" }), { status: 409 });
+    assert.throws(() => shipping.verifyQuote(`${quote.token}bad`,customer), { status: 409 });
+    assert.throws(() => jwt.verify(quote.token,"shipping-unit-test"), "Cotação não pode ser usada como sessão de login");
+    const { iat, exp, ...claims } = jwt.decode(quote.token);
+    const key = crypto.createHmac("sha256","shipping-unit-test").update("petflow/frete/v1").digest();
+    const expired = jwt.sign(claims,key,{ expiresIn:-1 });
+    assert.throws(() => shipping.verifyQuote(expired,customer), { status: 409 });
+});
+test("falhas de configuração e Google Maps não viram frete grátis", async () => {
+    await assert.rejects(shipping.quote(customer), { status: 503 });
+    process.env.GOOGLE_MAPS_API_KEY = "test-key";
+    await assert.rejects(shipping.quote({ ...customer, cep: "" }), { status: 400 });
+    global.fetch = async () => { throw new Error("timeout"); };
+    await assert.rejects(shipping.quote(customer), { status: 503 });
+    global.fetch = async () => ({ ok: false, status: 403, json: async () => ({}) });
+    await assert.rejects(shipping.quote(customer), { status: 503 });
+    global.fetch = async () => ({ ok: true, json: async () => ({ routes: [] }) });
+    await assert.rejects(shipping.quote(customer), { status: 422 });
+});

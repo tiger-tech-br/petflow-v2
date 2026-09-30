@@ -102,6 +102,7 @@ function securityMiddleware(app) {
     app.use(helmet({
         contentSecurityPolicy: {
             directives: {
+                "frame-src": ["'self'", "https://www.openstreetmap.org"],
                 "script-src": [
                     "'self'",
                     "'unsafe-inline'",

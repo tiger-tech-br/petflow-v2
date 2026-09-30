@@ -7,6 +7,7 @@ document.addEventListener("DOMContentLoaded", () => {
     setupTabs();
     setupEmailVerificationFromUrl();
     setupPublicLogin();
+    setupResendVerification();
     setupPublicRegister();
     setupPublicAccount();
     setupPublicOrders();
@@ -88,11 +89,27 @@ function setupPublicRegister() {
             );
 
             setStatus(status, payload.message || "Cadastro criado. Verifique seu e-mail para ativar a conta.");
+            document.getElementById("loginEmail").value = form.elements.email.value;
+            setStatus(document.getElementById("loginStatus"), payload.message);
             form.reset();
             document.querySelector("[data-auth-tab='login']")?.click();
         } catch (error) {
             setStatus(status, error.message);
         }
+    });
+}
+
+function setupResendVerification() {
+    document.querySelector("[data-resend-verification]")?.addEventListener("click", async event => {
+        event.preventDefault();
+        const status = document.getElementById("loginStatus");
+        const email = document.getElementById("loginEmail")?.value.trim();
+        if (!email) return setStatus(status, "Preencha seu e-mail para reenviar a confirmação.");
+        setStatus(status, "Solicitando confirmação...");
+        try {
+            const result = await request("/clientes/reenviar-confirmacao", "POST", { email });
+            setStatus(status, result.message);
+        } catch (error) { setStatus(status, error.message); }
     });
 }
 
@@ -290,7 +307,7 @@ function renderOrders(list, orders) {
 
                     <div>
                         <dt>Entrega</dt>
-                        <dd>${escapeHtml(formatOrderAddress(order))}</dd>
+                        <dd>${escapeHtml(formatOrderAddress(order.endereco_entrega || order))}</dd>
                     </div>
                 </dl>
 
@@ -305,6 +322,8 @@ function renderOrders(list, orders) {
 
                 ${renderOrderNotes(order)}
                 ${renderOrderTimeline(order.status)}
+                <p>Frete: ${currency(order.valor_frete || 0)}</p>
+                ${order.status === "SAIU_PARA_ENTREGA" ? `<a class="btn-secondary" href="/acompanhar-entrega?pedido=${encodeURIComponent(order.id)}">Acompanhar entrega por GPS</a>` : ""}
                 ${renderContinuePayment(order)}
             </article>
         `;

@@ -75,6 +75,9 @@ class VendaModel {
                 v.id,
                 v.cliente_id,
                 v.usuario_id,
+                v.valor_frete,
+                v.distancia_entrega_m,
+                v.endereco_entrega,
                 v.data_venda,
                 v.valor_total,
                 v.desconto,
@@ -202,7 +205,10 @@ class VendaModel {
                 valor_final,
                 forma_pagamento,
                 status,
-                observacoes
+                observacoes,
+                valor_frete,
+                distancia_entrega_m,
+                endereco_entrega
             )
             VALUES (
                 $1,
@@ -215,7 +221,10 @@ class VendaModel {
                 $8,
                 $9,
                 $10,
-                $11
+                $11,
+                $12,
+                $13,
+                $14
             )
             RETURNING *;
         `;
@@ -226,7 +235,7 @@ class VendaModel {
 
         const desconto = Number(dados.desconto ?? 0);
         const acrescimo = Number(dados.acrescimo ?? 0);
-        const valorFinal = valorTotal - desconto + acrescimo;
+        const valorFinal = valorTotal - desconto + acrescimo + Number(dados.valor_frete || 0);
 
         const values = [
             dados.empresaId ?? dados.empresa_id,
@@ -241,7 +250,10 @@ class VendaModel {
                 dados.forma_pagamento ??
                 "PIX",
             dados.status ?? "PENDENTE",
-            dados.observacoes?.trim() || null
+            dados.observacoes?.trim() || null,
+            dados.valor_frete || 0,
+            dados.distancia_entrega_m ?? null,
+            dados.endereco_entrega ? JSON.stringify(dados.endereco_entrega) : null
         ];
 
         const { rows } = await client.query(query, values);
@@ -448,7 +460,7 @@ class VendaModel {
             UPDATE vendas
             SET
                 valor_total = $1,
-                valor_final = $1 - desconto + acrescimo,
+                valor_final = $1 - desconto + acrescimo + valor_frete,
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = $2
             RETURNING *;
@@ -493,8 +505,8 @@ function resolvePaymentStatus(currentStatus, nextStatus) {
     }
 
     if (
-        currentStatus === "PAGAMENTO_APROVADO" &&
-        nextStatus === "AGUARDANDO_PAGAMENTO"
+        ["PAGAMENTO_APROVADO", "EM_SEPARACAO", "SAIU_PARA_ENTREGA", "ENTREGUE", "FINALIZADA"].includes(currentStatus) &&
+        ["AGUARDANDO_PAGAMENTO", "PAGAMENTO_APROVADO"].includes(nextStatus)
     ) {
         return currentStatus;
     }
