@@ -110,13 +110,7 @@ router.get(
 
     authMiddleware,
 
-    roleMiddleware(
-
-        "ADMIN",
-
-        "FUNCIONARIO"
-
-    ),
+    roleMiddleware("ADMIN"),
 
     clienteController.index
 
@@ -132,13 +126,7 @@ router.get(
 
     authMiddleware,
 
-    roleMiddleware(
-
-        "ADMIN",
-
-        "FUNCIONARIO"
-
-    ),
+    roleMiddleware("ADMIN"),
 
     idValidation,
 
@@ -158,13 +146,7 @@ router.post(
 
     authMiddleware,
 
-    roleMiddleware(
-
-        "ADMIN",
-
-        "FUNCIONARIO"
-
-    ),
+    roleMiddleware("ADMIN"),
 
     clienteValidation,
 
@@ -184,13 +166,7 @@ router.put(
 
     authMiddleware,
 
-    roleMiddleware(
-
-        "ADMIN",
-
-        "FUNCIONARIO"
-
-    ),
+    roleMiddleware("ADMIN"),
 
     idValidation,
 

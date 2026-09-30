@@ -26,10 +26,6 @@ BEGIN
         UPDATE estoque SET empresa_id = v_empresa_id WHERE empresa_id IS DISTINCT FROM v_empresa_id;
     END IF;
 
-    IF to_regclass('public.funcionarios') IS NOT NULL THEN
-        UPDATE funcionarios SET empresa_id = v_empresa_id WHERE empresa_id IS DISTINCT FROM v_empresa_id;
-    END IF;
-
     IF to_regclass('public.financeiro') IS NOT NULL THEN
         UPDATE financeiro SET empresa_id = v_empresa_id WHERE empresa_id IS DISTINCT FROM v_empresa_id;
     END IF;

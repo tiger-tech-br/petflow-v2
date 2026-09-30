@@ -28,8 +28,6 @@ const clienteRoutes = require("./routes/clienteRoutes");
 
 
 
-const funcionarioRoutes = require("./routes/funcionarioRoutes");
-
 const empresaRoutes = require("./routes/empresaRoutes");
 
 const categoriaRoutes = require("./routes/categoriaRoutes");
@@ -104,7 +102,7 @@ app.use(express.urlencoded({
 app.use(express.static(path.join(__dirname, "public")));
 
 // Modulos fora do escopo da loja de produtos, inclusive acesso direto.
-app.use(["/admin/pages/servicos", "/admin/pages/agendamentos", "/admin/pages/pets"], (req, res) => {
+app.use(["/admin/pages/servicos", "/admin/pages/agendamentos", "/admin/pages/pets", "/admin/pages/funcionarios"], (req, res) => {
     res.status(404).json({ success: false, message: "Modulo indisponivel nesta loja." });
 });
 
@@ -209,8 +207,6 @@ app.use("/api/public", publicCatalogRoutes);
 app.use("/api/clientes", clienteRoutes);
 
 
-
-app.use("/api/funcionarios", funcionarioRoutes);
 
 app.use("/api/empresa", empresaRoutes);
 

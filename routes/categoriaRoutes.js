@@ -92,13 +92,7 @@ router.get(
 
     authMiddleware,
 
-    roleMiddleware(
-
-        "ADMIN",
-
-        "FUNCIONARIO"
-
-    ),
+    roleMiddleware("ADMIN"),
 
     categoriaController.index
 
@@ -114,13 +108,7 @@ router.get(
 
     authMiddleware,
 
-    roleMiddleware(
-
-        "ADMIN",
-
-        "FUNCIONARIO"
-
-    ),
+    roleMiddleware("ADMIN"),
 
     idValidation,
 

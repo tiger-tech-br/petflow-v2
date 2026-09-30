@@ -110,13 +110,7 @@ router.get(
 
     authMiddleware,
 
-    roleMiddleware(
-
-        "ADMIN",
-
-        "FUNCIONARIO"
-
-    ),
+    roleMiddleware("ADMIN"),
 
     estoqueController.index
 
@@ -132,13 +126,7 @@ router.get(
 
     authMiddleware,
 
-    roleMiddleware(
-
-        "ADMIN",
-
-        "FUNCIONARIO"
-
-    ),
+    roleMiddleware("ADMIN"),
 
     produtoValidation,
 

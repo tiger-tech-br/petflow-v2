@@ -134,13 +134,7 @@ router.get(
 
     authMiddleware,
 
-    roleMiddleware(
-
-        "ADMIN",
-
-        "FUNCIONARIO"
-
-    ),
+    roleMiddleware("ADMIN"),
 
     produtoController.index
 
@@ -156,13 +150,7 @@ router.get(
 
     authMiddleware,
 
-    roleMiddleware(
-
-        "ADMIN",
-
-        "FUNCIONARIO"
-
-    ),
+    roleMiddleware("ADMIN"),
 
     idValidation,
 

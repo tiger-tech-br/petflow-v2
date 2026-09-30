@@ -290,22 +290,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_estoque_empresa_produto
 ON estoque(empresa_id, produto_id);
 
 
-CREATE TABLE IF NOT EXISTS funcionarios (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    empresa_id UUID DEFAULT get_petflow_empresa_id(),
-    nome VARCHAR(150) NOT NULL,
-    email VARCHAR(150),
-    telefone VARCHAR(20),
-    cargo VARCHAR(80),
-    foto TEXT,
-    status BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_funcionarios_empresa
-ON funcionarios(empresa_id);
-
 CREATE TABLE IF NOT EXISTS financeiro (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     empresa_id UUID DEFAULT get_petflow_empresa_id(),

@@ -12,9 +12,9 @@ test("migracoes e consultas nao dependem das tabelas clinicas removidas", () => 
             return entry.isDirectory() ? walk(file) : [file];
         });
     }
-    const legacy = /\b(?:FROM|JOIN|UPDATE|INTO|REFERENCES|TABLE(?:\s+IF\s+NOT\s+EXISTS)?)\s+(?:pets|servicos|agendamentos|consultas|prontuarios|vacinas|historico_vacinas)\b/i;
+    const legacy = /\b(?:FROM|JOIN|UPDATE|INTO|REFERENCES|TABLE(?:\s+IF\s+NOT\s+EXISTS)?)\s+(?:pets|servicos|agendamentos|consultas|prontuarios|vacinas|historico_vacinas|funcionarios)\b/i;
     for (const dir of ["database/sql", "models", "controllers", "services", "scripts"]) {
-        for (const file of walk(dir).filter(file => /\.(sql|js)$/.test(file))) {
+        for (const file of walk(dir).filter(file => /\.(sql|js)$/.test(file) && !file.endsWith("105_remover_funcionarios.sql"))) {
             assert.doesNotMatch(fs.readFileSync(file, "utf8"), legacy, file);
         }
     }
@@ -89,7 +89,7 @@ test("rotas removidas retornam 404 e paginas comerciais continuam acessiveis", a
     await new Promise(resolve => server.once("listening", resolve));
     const base = `http://127.0.0.1:${server.address().port}`;
     try {
-        for (const route of ["/servicos/banho", "/meus-pets", "/api/servicos", "/api/agendamentos", "/api/pets", "/api/public/servicos", "/api/public/clientes/pets", "/admin/pages/servicos/servicos.html", "/admin/pages/agendamentos/agendamentos.html", "/admin/pages/pets/pets.html"]) {
+    for (const route of ["/servicos/banho", "/meus-pets", "/api/servicos", "/api/agendamentos", "/api/pets", "/api/funcionarios", "/api/public/servicos", "/api/public/clientes/pets", "/admin/pages/servicos/servicos.html", "/admin/pages/agendamentos/agendamentos.html", "/admin/pages/pets/pets.html", "/admin/pages/funcionarios/funcionarios.html"]) {
             const response = await fetch(base + route);
             assert.equal(response.status, 404, route);
         }

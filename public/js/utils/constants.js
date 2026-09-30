@@ -28,8 +28,6 @@ const ROLES = {
 
     ADMIN: "admin",
 
-    FUNCIONARIO: "funcionario",
-
     CLIENTE: "cliente"
 
 };

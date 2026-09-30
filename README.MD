@@ -2,7 +2,7 @@
 
 Versão voltada a um petshop com venda de produtos. Mantém catálogo, sacola,
 conta do cliente, pedidos, pagamentos, clientes, produtos, estoque, fornecedores,
-compras, funcionários e financeiro. Serviços, agenda e cadastro de pets não
+compras e financeiro. Serviços, agenda, cadastro de pets e módulo de funcionários não
 estão disponíveis nas páginas ou APIs desta versão. O lembrete de atendimentos
 também não é iniciado.
 
@@ -35,7 +35,7 @@ navegador da instalação original na porta 4500.
 Todas as conexões da aplicação e dos scripts exigem o nome `petflow_v2`;
 outros bancos são recusados antes da conexão. Nunca aponte esta cópia para
 o banco original. As migrações do banco novo não criam tabelas de pets, serviços, agendamentos,
-consultas, prontuários ou vacinas. Nenhuma tabela de bancos existentes é apagada.
+consultas, prontuários, vacinas ou funcionários. Nenhuma tabela de bancos existentes é apagada.
 
 ## Railway
 

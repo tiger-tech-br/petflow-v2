@@ -23,7 +23,7 @@ router.get(
 
     "/",
 
-    roleMiddleware("ADMIN", "GERENTE", "FUNCIONARIO"),
+    roleMiddleware("ADMIN", "GERENTE"),
 
     DashboardController.dashboard
 
@@ -37,7 +37,7 @@ router.get(
 
     "/resumo",
 
-    roleMiddleware("ADMIN", "GERENTE", "FUNCIONARIO"),
+    roleMiddleware("ADMIN", "GERENTE"),
 
     DashboardController.resumo
 
@@ -51,7 +51,7 @@ router.get(
 
     "/ultimas-vendas",
 
-    roleMiddleware("ADMIN", "GERENTE", "FUNCIONARIO"),
+    roleMiddleware("ADMIN", "GERENTE"),
 
     DashboardController.ultimasVendas
 
@@ -65,7 +65,7 @@ router.get(
 
     "/ultimas-compras",
 
-    roleMiddleware("ADMIN", "GERENTE", "FUNCIONARIO"),
+    roleMiddleware("ADMIN", "GERENTE"),
 
     DashboardController.ultimasCompras
 
@@ -79,7 +79,7 @@ router.get(
 
     "/estoque-baixo",
 
-    roleMiddleware("ADMIN", "GERENTE", "FUNCIONARIO"),
+    roleMiddleware("ADMIN", "GERENTE"),
 
     DashboardController.estoqueBaixo
 
@@ -96,7 +96,7 @@ router.get(
 
     "/contas-vencidas",
 
-    roleMiddleware("ADMIN", "GERENTE", "FUNCIONARIO"),
+    roleMiddleware("ADMIN", "GERENTE"),
 
     DashboardController.contasVencidas
 
@@ -110,7 +110,7 @@ router.get(
 
     "/produtos-mais-vendidos",
 
-    roleMiddleware("ADMIN", "GERENTE", "FUNCIONARIO"),
+    roleMiddleware("ADMIN", "GERENTE"),
 
     DashboardController.produtosMaisVendidos
 
