@@ -80,6 +80,12 @@ test("menus publicos e administrativos nao divulgam modulos removidos", () => {
 test("rotas removidas retornam 404 e paginas comerciais continuam acessiveis", async () => {
     require("dotenv").config({ quiet: true });
     process.env.DB_NAME = "petflow_v2";
+    process.env.DB_EXPECTED_NAME = "petflow_v2";
+    process.env.DB_HOST = "127.0.0.1";
+    process.env.DB_PORT = "5432";
+    process.env.DB_USER = "test";
+    process.env.JWT_SECRET = "test-only-secret";
+    process.env.JWT_EXPIRES_IN = "1h";
     process.env.DB_PASSWORD ||= "test-only";
     process.env.DATABASE_URL = "";
     process.env.POSTGRES_URL = "";

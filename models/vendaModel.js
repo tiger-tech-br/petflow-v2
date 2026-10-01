@@ -366,7 +366,8 @@ class VendaModel {
 
         const status = resolvePaymentStatus(
             vendaAtual.status,
-            dados.status
+            dados.status,
+            dados.pagseguroResponse ?? dados.pagseguro_response
         );
 
         const pagseguroStatus =
@@ -499,14 +500,15 @@ class VendaModel {
 
 }
 
-function resolvePaymentStatus(currentStatus, nextStatus) {
+function resolvePaymentStatus(currentStatus, nextStatus, providerPayload) {
     if (!nextStatus) {
         return currentStatus;
     }
 
     if (
         ["PAGAMENTO_APROVADO", "EM_SEPARACAO", "SAIU_PARA_ENTREGA", "ENTREGUE", "FINALIZADA"].includes(currentStatus) &&
-        ["AGUARDANDO_PAGAMENTO", "PAGAMENTO_APROVADO"].includes(nextStatus)
+        (["AGUARDANDO_PAGAMENTO", "PAGAMENTO_APROVADO"].includes(nextStatus) ||
+            (String(providerPayload?.id || "").startsWith("CHEC_") && !providerPayload?.charges?.length))
     ) {
         return currentStatus;
     }

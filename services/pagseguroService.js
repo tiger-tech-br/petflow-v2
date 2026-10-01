@@ -87,6 +87,8 @@ function buildCheckoutPayload(pedido) {
     return {
         reference_id: String(pedido.id),
         customer_modifiable: true,
+        additional_amount: toCents(pedido.acrescimo),
+        discount_amount: toCents(pedido.desconto),
         return_url: `${appUrl}/meus-pedidos`,
         redirect_url: `${appUrl}/meus-pedidos`,
         redirect_waiting_time: 5,
@@ -165,7 +167,7 @@ function normalizarCheckout(data) {
 
     return {
         checkoutId: data?.id || null,
-        orderId: data?.order_id || data?.reference_id || null,
+        orderId: data?.order_id || (String(data?.id || "").startsWith("ORDE_") ? data.id : null),
         chargeId: charge?.id || null,
         status: charge?.status || data?.status || null,
         paymentMethod: mapPaymentMethod(
@@ -199,7 +201,7 @@ function extrairEventoWebhook(body) {
     return {
         referenceId,
         pagseguroStatus,
-        orderId: body?.order_id || body?.id || null,
+        orderId: body?.order_id || (String(body?.id || "").startsWith("ORDE_") ? body.id : null),
         chargeId: body?.charges?.[0]?.id || body?.charge_id || null,
         paymentMethod: mapPaymentMethod(
             body?.charges?.[0]?.payment_method?.type ||

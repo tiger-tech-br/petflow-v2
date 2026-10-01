@@ -457,33 +457,24 @@ const VendaService = {
         dadosPagamento = {}
     ) {
 
-        const vendaAtual = await buscarVendaPagamento(
-            referencia,
-            empresaId,
-            db
-        );
-
-        if (!vendaAtual) {
-            return null;
-        }
-
-        const vendaAtualizada =
-            await VendaModel.atualizarPagamentoPorReferencia(
-                referencia,
-                {
-                    status,
-                    ...dadosPagamento
-                }
+        const result = await db.transaction(async client => {
+            const vendaAtual = await buscarVendaPagamento(referencia, empresaId, client);
+            if (!vendaAtual) return null;
+            const vendaAtualizada = await VendaModel.atualizarPagamentoPorReferencia(
+                referencia, { ...dadosPagamento, status }, client
             );
-
-        if (vendaAtual.status !== status) {
+            return { vendaAtual, vendaAtualizada: vendaAtualizada || vendaAtual };
+        });
+        if (!result) return null;
+        const { vendaAtual, vendaAtualizada } = result;
+        if (vendaAtual.status !== vendaAtualizada.status) {
             await enviarEmailStatusPedido(
-                vendaAtualizada || vendaAtual,
-                status
+                vendaAtualizada,
+                vendaAtualizada.status
             );
         }
 
-        return vendaAtualizada || vendaAtual;
+        return vendaAtualizada;
 
     }
 
