@@ -13,10 +13,12 @@ let couponSubtotal = null;
 let couponLoading = false;
 let couponRevision = 0;
 let shippingRevision = 0;
+let automaticShippingTimer = null;
 let cepRevision = 0;
 const deliveryFields = { cep: "deliveryCep", endereco: "deliveryStreet", numero: "deliveryNumber", complemento: "deliveryComplement", bairro: "deliveryDistrict", cidade: "deliveryCity", estado: "deliveryState" };
 const embeddedCart = window.parent !== window && new URLSearchParams(location.search).get("sidebar") === "1";
 if (embeddedCart) document.body.classList.add("cart-embedded");
+document.getElementById("calculateShipping").hidden = Boolean(getToken());
 
 document.addEventListener("DOMContentLoaded", () => {
     setupCartPage();
@@ -106,6 +108,7 @@ function setupCartEvents() {
         }
         invalidateShipping();
         sessionStorage.setItem("petflow_delivery_address", JSON.stringify(readDeliveryAddress()));
+        scheduleAutomaticShipping();
     });
     document.addEventListener("input", event => {
         const input = event.target.closest("[data-cart-quantity]");
@@ -173,6 +176,7 @@ function renderCart() {
 }
 
 function renderTotals() {
+    document.getElementById("calculateShipping").hidden = Boolean(getToken());
     const items = getCartItems();
     const productsTotal = couponSubtotal ?? getCartTotal(items);
     const discount = appliedCoupon?.desconto || 0;
@@ -254,7 +258,8 @@ async function refreshCoupons(codigo = selectedCoupon) {
     }
 }
 
-async function calculateShipping() {
+async function calculateShipping({ retry = 0 } = {}) {
+    clearTimeout(automaticShippingTimer);
     if (submitting) return;
     const address = readDeliveryAddress();
     const button = document.getElementById("calculateShipping");
@@ -276,11 +281,31 @@ async function calculateShipping() {
             body: JSON.stringify({ endereco: address }) });
         const payload = await response.json();
         if (revision !== shippingRevision) return;
-        if (!response.ok) throw new Error(payload.message || "Não foi possível calcular o frete.");
+        if (!response.ok) {
+            if (response.status === 401) {
+                customer = null;
+                clearCartSession();
+            }
+            throw Object.assign(new Error(payload.message || "Não foi possível calcular o frete."), {
+                status: response.status,
+                retryAfter: Number(response.headers?.get("Retry-After")) || 60
+            });
+        }
         shippingQuote = payload.data;
         sessionStorage.setItem("petflow_delivery_address", JSON.stringify(address));
         status.textContent = `${(shippingQuote.distanciaMetros / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 3 })} km pelas ruas — ${currency(shippingQuote.valor)}. Cotação válida por 15 minutos.`;
-    } catch (error) { if (revision === shippingRevision) status.textContent = error.message || "Não foi possível consultar a entrega. Tente novamente."; }
+    } catch (error) {
+        if (revision !== shippingRevision) return;
+        status.textContent = error.message || "Não foi possível consultar a entrega. Tente novamente.";
+        const canRetry = !error.status || error.status === 429 || error.status >= 500;
+        if (customer && getToken() && retry === 0 && canRetry) {
+            const seconds = error.status === 429 ? Math.min(300, Math.max(1, error.retryAfter)) : 10;
+            status.textContent += ` Nova tentativa automática em ${seconds} segundos.`;
+            automaticShippingTimer = setTimeout(() => {
+                if (revision === shippingRevision && customer && getToken()) return calculateShipping({ retry: 1 });
+            }, seconds * 1000);
+        }
+    }
     finally { if (revision === shippingRevision) { button.disabled = false; renderTotals(); } }
 }
 
@@ -295,14 +320,29 @@ function restoreDeliveryAddress() {
     let address = customer || {};
     try { address = JSON.parse(sessionStorage.getItem("petflow_delivery_address")) || address; } catch { /* Usa endereço salvo do cliente. */ }
     for (const [field, id] of Object.entries(deliveryFields)) document.getElementById(id).value = address[field] || "";
-    if (hasDeliveryAddress(readDeliveryAddress())) calculateShipping();
+    renderTotals();
+    if (customer && getToken() && hasDeliveryAddress(readDeliveryAddress())) return calculateShipping();
+    if (customer && getToken()) document.getElementById("shippingStatus").textContent = "Complete o endereço para calcularmos a entrega automaticamente.";
+}
+
+function scheduleAutomaticShipping() {
+    clearTimeout(automaticShippingTimer);
+    const address = readDeliveryAddress();
+    if (!customer || !getToken() || !hasDeliveryAddress(address) || !/^\d{8}$/.test(address.cep) || !/^[A-Z]{2}$/.test(address.estado)) return;
+    document.getElementById("shippingStatus").textContent = "Atualizando a entrega para este endereço...";
+    automaticShippingTimer = setTimeout(() => {
+        if (customer && getToken()) return calculateShipping();
+    }, 800);
 }
 
 function invalidateShipping() {
+    clearTimeout(automaticShippingTimer);
     ++shippingRevision;
     shippingQuote = null;
     document.getElementById("calculateShipping").disabled = false;
-    document.getElementById("shippingStatus").textContent = "Confira o endereço e consulte a entrega.";
+    document.getElementById("shippingStatus").textContent = customer && getToken()
+        ? "Complete o endereço para calcularmos a entrega automaticamente."
+        : "Confira o endereço e consulte a entrega.";
     renderTotals();
 }
 
@@ -324,6 +364,7 @@ async function lookupDeliveryCep() {
         invalidateShipping();
         sessionStorage.setItem("petflow_delivery_address", JSON.stringify(readDeliveryAddress()));
         status.textContent = payload.data.endereco ? "Endereço encontrado. Confira e informe o número." : "CEP encontrado. Complete a rua, o bairro e o número.";
+        scheduleAutomaticShipping();
     } catch (error) { if (revision === cepRevision) status.textContent = error.message || "Preencha o endereço manualmente ou tente novamente."; }
 }
 
@@ -345,6 +386,8 @@ function renderEmpty(message) {
 }
 
 async function renderCustomer() {
+    clearTimeout(automaticShippingTimer);
+    ++shippingRevision;
     shippingQuote = null;
     customer = null;
     document.getElementById("calculateShipping").disabled = false;
@@ -441,6 +484,8 @@ async function submitOrder(event) {
         shippingQuote = null;
         renderTotals();
         setStatus(status, "Calcule novamente o frete antes de pagar.");
+        await calculateShipping();
+        if (shippingQuote) setStatus(status, "Entrega atualizada. Confira o total e clique em Comprar para continuar.");
         return;
     }
     submitting = true;

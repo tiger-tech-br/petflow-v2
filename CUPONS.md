@@ -59,6 +59,8 @@ O cálculo do frete continua dependendo de `GOOGLE_MAPS_API_KEY` com Routes API 
 
 Visitantes podem buscar o endereço pelo CEP, informar número/complemento e consultar o frete. Rua, bairro, cidade e UF também podem ser preenchidos manualmente se a consulta de CEP estiver indisponível. O endereço fica nesta sessão do navegador, para continuar após entrar na conta. A compra exige login, mas a cotação não.
 
+Para clientes logados, a entrega é calculada automaticamente ao abrir a sacola com endereço completo e após editar o endereço. O botão de cálculo aparece somente para visitantes. Alterações durante a digitação são agrupadas para evitar consultas a cada tecla; uma falha temporária permite uma repetição automática. Uma cotação expirada é atualizada antes de pedir nova confirmação da compra.
+
 O frete e o total completo só aparecem após uma cotação válida. Alterar o endereço invalida a cotação anterior. O servidor assina a cotação e verifica o endereço no momento da compra; o pedido e o PagBank usam esse endereço, mesmo que seja diferente do perfil.
 
 ### Configuração do Google Maps
