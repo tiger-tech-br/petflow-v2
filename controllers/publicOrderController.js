@@ -153,8 +153,8 @@ async function criarPedido(request, response, next) {
             request.customer.id
         );
 
-        const camposFaltando =
-            verificarEndereco(cliente);
+        const enderecoEntrega = body.enderecoEntrega ? freteService.validateAddress(body.enderecoEntrega) : cliente;
+        const camposFaltando = verificarEndereco(enderecoEntrega);
 
         if (camposFaltando.length > 0) {
 
@@ -174,7 +174,7 @@ async function criarPedido(request, response, next) {
         ========================================== */
 
         pagseguroService.assertConfigured();
-        const frete = freteService.verifyQuote(body.freteToken, cliente);
+        const frete = freteService.verifyQuote(body.freteToken, { ...enderecoEntrega, id: cliente.id });
         const pedido = await VendaService.finalizarVenda(
             empresaId,
             {
@@ -187,6 +187,7 @@ async function criarPedido(request, response, next) {
                 status: "AGUARDANDO_PAGAMENTO",
 
                 desconto: 0,
+                cupomCodigo: body.cupomCodigo,
 
                 acrescimo: 0,
                 valor_frete: frete.valor,

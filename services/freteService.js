@@ -8,7 +8,19 @@ const addressFields = ["endereco", "numero", "complemento", "bairro", "cidade", 
 const error = (message, status = 400) => Object.assign(new Error(message), { status });
 
 function addressSnapshot(customer) {
-    return Object.fromEntries(addressFields.map(key => [key, String(customer[key] || "").trim()]));
+    return Object.fromEntries(addressFields.map(key => [key, String(customer?.[key] || "").trim()]));
+}
+function validateAddress(input) {
+    if (!input || typeof input !== "object" || Array.isArray(input)) throw error("Informe o endereço de entrega.");
+    const address = addressSnapshot(input);
+    address.cep = address.cep.replace(/\D/g, "");
+    address.estado = address.estado.toUpperCase();
+    if (!["endereco", "numero", "bairro", "cidade", "estado", "cep"].every(key => address[key]) ||
+        !/^\d{8}$/.test(address.cep) || !/^[A-Z]{2}$/.test(address.estado) ||
+        addressFields.some(field => (input[field] != null && typeof input[field] === "object") || address[field].length > 200)) {
+        throw error("Confira o CEP e complete rua, número, bairro, cidade e estado da entrega.");
+    }
+    return address;
 }
 function origin() { return process.env.DELIVERY_ORIGIN_ADDRESS?.trim() || DEFAULT_ORIGIN; }
 function fingerprint(customer) {
@@ -19,12 +31,12 @@ function priceForDistance(meters) {
     return Math.max(0, Math.ceil((meters - 1000) / 1000)) * 3;
 }
 async function quote(customer) {
-    const address = addressSnapshot(customer);
-    if (!["endereco", "numero", "bairro", "cidade", "estado", "cep"].every(key => address[key])) {
-        throw error("Complete seu endereço e CEP em Minha conta antes de calcular o frete.");
+    const address = validateAddress(customer);
+    const key = process.env.GOOGLE_MAPS_API_KEY?.trim() || process.env.GOOGLE_API_KEY?.trim();
+    if (!key) {
+        console.error("[frete] Configure GOOGLE_MAPS_API_KEY ou GOOGLE_API_KEY no serviço da aplicação.");
+        throw error("A loja ainda está configurando o cálculo da entrega. Tente novamente mais tarde.", 503);
     }
-    const key = process.env.GOOGLE_MAPS_API_KEY?.trim();
-    if (!key) throw error("O cálculo de frete está temporariamente indisponível. Entre em contato com a loja.", 503);
     let response, payload;
     try {
         response = await fetch("https://routes.googleapis.com/directions/v2:computeRoutes", {
@@ -37,19 +49,37 @@ async function quote(customer) {
         throw error("Não foi possível calcular o frete agora. Tente novamente.", 503);
     }
     if (!response.ok) {
-        console.error("[frete] Google Routes indisponível", { status: response.status });
+        console.error("[frete] Google Routes indisponível. Confira Routes API, faturamento e restrições da chave.", {
+            status: response.status, code: payload?.error?.status,
+            reason: payload?.error?.details?.find(detail => detail.reason)?.reason
+        });
         throw error("Não foi possível calcular o frete agora. Tente novamente.", 503);
     }
     const meters = payload?.routes?.[0]?.distanceMeters;
     if (!Number.isInteger(meters) || meters < 0) throw error("Não encontramos uma rota. Confira o endereço e o CEP da entrega.", 422);
-    const token = jwt.sign({ sub: customer.id, address: fingerprint(customer), meters }, quoteSecret, { algorithm: "HS256", audience: "frete", expiresIn: "15m" });
+    const token = jwt.sign({ ...(customer.id ? { sub: customer.id } : {}), address: fingerprint(address), meters }, quoteSecret, { algorithm: "HS256", audience: "frete", expiresIn: "15m" });
     return { token, distanciaMetros: meters, valor: priceForDistance(meters), expiraEm: new Date(Date.now() + 900000).toISOString() };
 }
 function verifyQuote(token, customer) {
     let decoded;
     try { decoded = jwt.verify(token, quoteSecret, { algorithms: ["HS256"], audience: "frete" }); }
     catch { throw error("Calcule novamente o frete antes de finalizar o pedido.", 409); }
-    if (decoded.sub !== customer.id || decoded.address !== fingerprint(customer)) throw error("O endereço mudou. Calcule novamente o frete.", 409);
-    return { valor: priceForDistance(decoded.meters), distanciaMetros: decoded.meters, endereco: addressSnapshot(customer) };
+    const address = validateAddress(customer);
+    if ((decoded.sub && decoded.sub !== customer.id) || decoded.address !== fingerprint(address)) throw error("O endereço mudou. Calcule novamente o frete.", 409);
+    return { valor: priceForDistance(decoded.meters), distanciaMetros: decoded.meters, endereco: address };
 }
-module.exports = { quote, verifyQuote, priceForDistance, addressSnapshot };
+
+async function consultarCep(value) {
+    const cep = String(value || "").replace(/\D/g, "");
+    if (!/^\d{8}$/.test(cep)) throw error("Informe um CEP com 8 dígitos.");
+    let response, data;
+    try {
+        response = await fetch(`https://viacep.com.br/ws/${cep}/json/`, { signal: AbortSignal.timeout(8000) });
+        if (!response.ok) throw new Error("CEP indisponível");
+        data = await response.json();
+    } catch { throw error("Não foi possível buscar o CEP. Preencha o endereço manualmente ou tente novamente.", 503); }
+    if (data.erro) throw error("CEP não encontrado. Confira os números informados.", 404);
+    if (!data.localidade || !data.uf) throw error("Não foi possível identificar esse CEP.", 422);
+    return { cep, endereco: data.logradouro || "", bairro: data.bairro || "", cidade: data.localidade, estado: data.uf };
+}
+module.exports = { quote, verifyQuote, priceForDistance, addressSnapshot, validateAddress, consultarCep };

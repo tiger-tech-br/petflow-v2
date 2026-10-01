@@ -49,6 +49,7 @@ test("cadastro, confirmação, compra, webhook e estoque em PostgreSQL isolado",
                 checkouts++;
                 assert.equal(checkout.shipping.amount, 600, "PagBank recebe frete em centavos");
                 assert.equal(checkout.shipping.type, "FIXED");
+                assert.equal(checkout.discount_amount, 250, "PagBank recebe o desconto salvo, em centavos");
                 assert.equal(checkout.shipping.address.street, "Rua de Teste", "Usa endereço congelado na compra");
                 return { data: { id: "CHEC_TEST", status: "ACTIVE", links: [{ rel: "PAY", href: "https://example.invalid/test-checkout" }] } };
             },
@@ -94,11 +95,39 @@ test("cadastro, confirmação, compra, webhook e estoque em PostgreSQL isolado",
         assert.equal(quote.body.data.valor, 6);
         payload.freteToken = quote.body.data.token;
         payload.valor_frete = 0; // Não deve ser confiado pelo servidor.
+        payload.desconto = 999;
+        const couponBody = { codigo: "petflow10", itens: [{ produto_id: product, quantidade: 2, preco: .01 }] };
+        assert.equal((await request("/api/public/cupons/consultar", "POST", couponBody)).status, 401);
+        const preview = await request("/api/public/cupons/consultar", "POST", couponBody, token);
+        assert.equal(preview.status, 200, JSON.stringify(preview.body));
+        assert.equal(preview.body.data.produtos, 25);
+        assert.equal(preview.body.data.cupom.desconto, 2.5);
+        assert.equal(preview.body.data.disponiveis[0].codigo, "PETFLOW10");
+        payload.cupomCodigo = "PETFLOW10";
+        await pool.query("UPDATE cupons SET ativo=FALSE WHERE codigo='PETFLOW10'");
+        assert.equal((await request("/api/public/pedidos", "POST", payload, token)).status, 400, "Revalida cupom ao comprar");
+        assert.equal((await pool.query("SELECT COUNT(*)::int AS n FROM vendas")).rows[0].n, 0, "Pedido inválido é revertido");
+        await pool.query("UPDATE cupons SET ativo=TRUE WHERE codigo='PETFLOW10'");
         res = await request("/api/public/pedidos", "POST", payload, token);
         assert.equal(res.status, 201, JSON.stringify(res.body));
         const order = res.body.data.id;
-        assert.equal(Number(res.body.data.valor_final), 31, "Produtos 25 + frete 6; valores do navegador são ignorados");
+        assert.equal(Number(res.body.data.valor_final), 28.5, "Produtos 25 - desconto 2,50 + frete 6; valores do navegador são ignorados");
+        assert.equal(Number(res.body.data.desconto), 2.5);
+        assert.equal(res.body.data.cupom_codigo, "PETFLOW10");
+        await pool.query("UPDATE cupons SET valor=20 WHERE codigo='PETFLOW10'");
         assert.equal(Number(res.body.data.valor_frete), 6);
+        const deliveryAddress = { endereco: "Rua do Visitante", numero: "123", bairro: "Centro", cidade: "Santo André", estado: "SP", cep: "09000000" };
+        const guestQuote = await request("/api/public/frete/cotar", "POST", { endereco: deliveryAddress });
+        assert.equal(guestQuote.status, 200, JSON.stringify(guestQuote.body));
+        assert.equal(guestQuote.body.data.valor, 6, "Visitante calcula a entrega sem conta");
+        const guestOrder = await request("/api/public/pedidos", "POST", {
+            ...payload, cupomCodigo: null, freteToken: guestQuote.body.data.token, enderecoEntrega: deliveryAddress
+        }, token);
+        assert.equal(guestOrder.status, 201, JSON.stringify(guestOrder.body));
+        assert.equal(Number(guestOrder.body.data.desconto), 0, "Desconto arbitrário do navegador é ignorado sem cupom");
+        assert.equal(Number(guestOrder.body.data.valor_final), 31);
+        assert.equal(guestOrder.body.data.endereco_entrega.endereco, deliveryAddress.endereco, "Pedido usa endereço cotado, não outro endereço do perfil");
+        assert.equal((await request("/api/public/frete/cotar", "POST", {})).status, 400);
         await pool.query("UPDATE clientes SET endereco='Rua Alterada' WHERE id=$1", [res.body.data.cliente_id]);
         assert.equal((await request("/api/public/pedidos", "POST", payload, token)).status, 409, "Cotação invalida após mudança de endereço");
         const attempts = await Promise.all([1,2].map(() => request("/api/public/pagamentos", "POST", { vendaId: order }, token)));
@@ -150,7 +179,7 @@ test("cadastro, confirmação, compra, webhook e estoque em PostgreSQL isolado",
         for (const file of fs.readdirSync("database/sql").filter(f => f.endsWith(".sql")).sort()) {
             await pool.query(fs.readFileSync(`database/sql/${file}`, "utf8"));
         }
-        assert.equal(Number((await pool.query("SELECT valor_final FROM vendas WHERE id=$1", [order])).rows[0].valor_final), 31);
+        assert.equal(Number((await pool.query("SELECT valor_final FROM vendas WHERE id=$1", [order])).rows[0].valor_final), 28.5);
         const pagbank = require("../services/pagseguroService");
         assert.equal(pagbank.mapStatusToVenda("AUTHORIZED"), "AGUARDANDO_PAGAMENTO");
         assert.equal(pagbank.mapStatusToVenda("EXPIRED"), "CANCELADA");

@@ -543,49 +543,11 @@ function getFavoriteProducts() {
 }
 
 function setupCartCheckout() {
-    injectCheckoutModal();
-
-    document.querySelectorAll("[aria-label='Sacola'], .menu-action-link[aria-label='Abrir sacola']").forEach(link => {
-        link.addEventListener("click", event => {
-            event.preventDefault();
-            openCheckoutModal();
-        });
-    });
-
-    document.addEventListener("click", event => {
-        if (event.target.closest("[data-cart-close]")) {
-            closeCheckoutModal();
-        }
-
-        if (event.target.classList.contains("checkout-overlay")) {
-            closeCheckoutModal();
-        }
-
-        const remove = event.target.closest("[data-cart-remove]");
-        if (remove) {
-            delete publicCart[remove.dataset.cartRemove];
-            persistPublicState();
-            renderCheckoutItems();
-            renderProducts(currentVisibleProducts());
-        }
-    });
-
-    document.addEventListener("input", event => {
-        const quantity = event.target.closest("[data-cart-quantity]");
-
-        if (!quantity) {
-            return;
-        }
-
-        publicCart[quantity.dataset.cartQuantity] = Math.max(1, Number(quantity.value || 1));
-        persistPublicState();
-        renderCheckoutItems();
-    });
-
-    document.addEventListener("submit", event => {
-        if (event.target?.id === "checkoutForm") {
-            submitPublicOrder(event);
-        }
+    document.addEventListener("petflow:cart-changed", () => {
+        publicCart = normalizeCartStorage();
+        updateHeaderCounters();
+        syncProductButtons();
+        renderFavoritesItems();
     });
 }
 
@@ -622,7 +584,7 @@ function injectCheckoutModal() {
     `);
 }
 function openCheckoutModal() {
-    window.location.assign("/sacola");
+    window.PetFlowCart?.open();
 }
 
 function closeCheckoutModal() {

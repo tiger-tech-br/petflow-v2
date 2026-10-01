@@ -9,10 +9,19 @@ const newsletterController = require("../controllers/newsletterController");
 const customerAuthMiddleware = require("../middlewares/customerAuthMiddleware");
 
 const router = express.Router();
+const cupomController = require("../controllers/cupomController");
+const cupomLimiter = require("express-rate-limit")({ windowMs: 60000, limit: 40,
+    standardHeaders: true, legacyHeaders: false,
+    message: { success: false, message: "Aguarde um minuto antes de consultar cupons novamente." } });
+router.post("/cupons/consultar", customerAuthMiddleware, cupomLimiter, cupomController.consultar);
 const entregaController = require("../controllers/entregaController");
 const freteLimiter = require("express-rate-limit")({ windowMs: 60000, limit: 6, standardHeaders: true, legacyHeaders: false,
     message: { success: false, message: "Aguarde um minuto antes de calcular novamente." } });
-router.post("/frete/cotar", customerAuthMiddleware, freteLimiter, entregaController.cotar);
+const optionalCustomerAuth = (req, res, next) => req.headers.authorization ? customerAuthMiddleware(req, res, next) : next();
+const cepLimiter = require("express-rate-limit")({ windowMs: 60000, limit: 30, standardHeaders: true, legacyHeaders: false,
+    message: { success: false, message: "Aguarde um minuto antes de consultar outro CEP." } });
+router.get("/frete/cep/:cep", cepLimiter, entregaController.consultarCep);
+router.post("/frete/cotar", freteLimiter, optionalCustomerAuth, entregaController.cotar);
 router.get("/pedidos/:id/rastreamento", customerAuthMiddleware, entregaController.acompanhar);
 router.post("/entregas/localizacao", entregaController.localizacao);
 router.delete("/entregas/localizacao", entregaController.localizacao);

@@ -14,6 +14,7 @@ const MovimentacaoEstoqueService = require(
 );
 
 const FinanceiroService = require("./financeiroService");
+const CupomService = require("./cupomService");
 
 const {
     sendOptionalEmail,
@@ -69,7 +70,7 @@ const VendaService = {
             throw new Error("Forma de pagamento inválida.");
         }
 
-        const desconto = Number(venda.desconto ?? 0);
+        let desconto = Number(venda.desconto ?? 0);
         const acrescimo = Number(venda.acrescimo ?? 0);
         const valorFrete = Number(venda.valor_frete ?? 0);
         if (!Number.isFinite(valorFrete) || valorFrete < 0) throw new Error("Frete inválido.");
@@ -119,7 +120,7 @@ const VendaService = {
                         venda.status ??
                         "AGUARDANDO_PAGAMENTO",
 
-                    desconto,
+                    desconto: 0,
 
                     acrescimo,
                     valor_frete: valorFrete,
@@ -252,6 +253,14 @@ const VendaService = {
 
             }
 
+            valorTotalBruto = Math.round(valorTotalBruto * 100) / 100;
+            let cupomCodigo = null;
+            if (venda.cupomCodigo != null && venda.cupomCodigo !== "") {
+                const cupom = await CupomService.validar(client, empresaId, venda.cupomCodigo, Math.round(valorTotalBruto * 100), true);
+                desconto = cupom.desconto;
+                cupomCodigo = cupom.codigo;
+            }
+
             const valorFinal =
                 valorTotalBruto -
                 desconto +
@@ -274,12 +283,16 @@ const VendaService = {
             ==========================================
             */
 
-            const vendaAtualizada =
-                await VendaModel.atualizarValorTotal(
-                    novaVenda.id,
-                    valorTotalBruto,
-                    client
-                );
+            if (cupomCodigo && Math.round(valorFinal * 100) === 0) {
+                throw Object.assign(new Error("O total para pagamento deve ser maior que zero. Adicione outro produto ou remova o cupom."), { status: 400 });
+            }
+
+            const { rows: [vendaAtualizada] } = await client.query(
+                `UPDATE vendas SET valor_total=$1, desconto=$2, cupom_codigo=$3,
+                 valor_final=$1::numeric-$2::numeric+acrescimo+valor_frete, updated_at=NOW()
+                 WHERE id=$4 AND empresa_id=$5 RETURNING *`,
+                [valorTotalBruto, desconto, cupomCodigo, novaVenda.id, empresaId]
+            );
 
             await client.query("COMMIT");
 

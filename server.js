@@ -2,8 +2,8 @@ const app = require("./app");
 
 const { PORT } = require("./config/env");
 const { assertEmailConfigured } = require("./services/emailService");
-if (!process.env.GOOGLE_MAPS_API_KEY?.trim()) {
-    console.warn("[frete] Configure GOOGLE_MAPS_API_KEY com Routes API habilitada para liberar novas compras com entrega.");
+if (!process.env.GOOGLE_MAPS_API_KEY?.trim() && !process.env.GOOGLE_API_KEY?.trim()) {
+    console.warn("[frete] Configure GOOGLE_MAPS_API_KEY ou GOOGLE_API_KEY com Routes API habilitada para liberar novas compras com entrega.");
 }
 
 try {

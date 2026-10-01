@@ -138,3 +138,5 @@ function setStatus(element, message) {
         element.textContent = message || "";
     }
 }
+
+document.addEventListener("petflow:cart-changed", () => { if (currentProduct) renderProduct(currentProduct); });

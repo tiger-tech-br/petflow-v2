@@ -8,9 +8,20 @@ const uuid = value => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]
 
 async function cotar(req, res, next) {
     try {
-        const { rows } = await db.query("SELECT * FROM clientes WHERE id=$1 AND empresa_id=$2", [req.customer.id, req.customer.empresaId]);
-        if (!rows[0]) throw fail("Cliente não encontrado.", 404);
-        res.set("Cache-Control", "no-store").json({ success: true, data: await frete.quote(rows[0]) });
+        let address = req.body?.endereco;
+        if (!address && req.customer) {
+            const { rows } = await db.query("SELECT * FROM clientes WHERE id=$1 AND empresa_id=$2", [req.customer.id, req.customer.empresaId]);
+            if (!rows[0]) throw fail("Cliente não encontrado.", 404);
+            address = rows[0];
+        }
+        if (!address) throw fail("Informe o CEP e o endereço para calcular a entrega.", 400);
+        const validated = frete.validateAddress(address);
+        res.set("Cache-Control", "no-store").json({ success: true, data: await frete.quote({ ...validated, ...(req.customer ? { id: req.customer.id } : {}) }) });
+    } catch (e) { next(e); }
+}
+async function consultarCep(req, res, next) {
+    try {
+        res.set("Cache-Control", "no-store").json({ success: true, data: await frete.consultarCep(req.params.cep) });
     } catch (e) { next(e); }
 }
 async function criarLink(req, res, next) {
@@ -61,4 +72,4 @@ async function acompanhar(req, res, next) {
         res.set("Cache-Control", "no-store").json({ success: true, data: rows[0] });
     } catch (e) { next(e); }
 }
-module.exports = { cotar, criarLink, localizacao, acompanhar };
+module.exports = { cotar, consultarCep, criarLink, localizacao, acompanhar };

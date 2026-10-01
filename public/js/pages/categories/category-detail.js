@@ -310,3 +310,5 @@ function escapeHtml(value) {
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
 }
+
+document.addEventListener("petflow:cart-changed", applyFilters);

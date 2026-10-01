@@ -1,5 +1,39 @@
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap");
 
+[hidden] { display: none !important; }
+.coupon-box { margin: 16px 0; padding: 16px; border: 1px solid #dbe7ea; border-radius: 8px; }
+.coupon-heading, .coupon-input-row, .coupon-option, .applied-coupon { display: flex; align-items: center; gap: 12px; justify-content: space-between; }
+.coupon-heading p, .coupon-option p { margin: 6px 0; font-size: .85rem; line-height: 1.5; color: #647481; }
+#couponCount { display: inline-block; background: #04766d; color: white; border-radius: 20px; padding: 2px 7px; font-size: .8rem; }
+.coupon-form { display: grid; gap: 8px; margin-top: 16px; }
+.coupon-input-row input { min-width: 0; }
+.coupon-option { margin-top: 14px; padding-top: 14px; border-top: 1px solid #dbe7ea; }
+.coupon-option small { color: #04766d; }
+.applied-coupon { margin-top: 14px; color: #04766d; }
+.cart-savings { padding: 12px; background: #e6f6f3; color: #04766d; border-radius: 8px; margin: 0; }
+.cart-form h3 { margin: 12px 0 0; }
+.shipping-form { display: grid; gap: 8px; }
+.shipping-form label { font-size: .88rem; font-weight: 600; }
+.address-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+.address-pair label { display: grid; gap: 6px; }
+.cart-embedded { background: #f7fbfa; }
+.cart-embedded .public-header, .cart-embedded .cart-topbar, .cart-embedded .cart-header { display: none; }
+.cart-embedded .cart-page { width: 100%; margin: 0; padding: 14px; }
+.cart-embedded .cart-layout { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+.cart-embedded .cart-items, .cart-embedded .cart-summary { box-shadow: none; padding: 14px; }
+.cart-embedded .cart-summary { position: static; }
+.cart-embedded .cart-item { grid-template-columns: 56px minmax(0, 1fr) 66px 36px; padding: 8px; gap: 8px; }
+.cart-embedded .cart-item img { width: 56px; height: 56px; }
+.cart-embedded .cart-item strong { font-size: .85rem; }
+.cart-embedded .remove-button { width: 36px; }
+.cart-embedded .cart-total strong { font-size: 1.1rem; }
+.cart-embedded .btn-secondary { cursor: pointer; }
+@media (max-width: 380px) {
+    .cart-embedded .cart-item { grid-template-columns: 48px minmax(0, 1fr) 36px; }
+    .cart-embedded .cart-item input { grid-column: 2; grid-row: 2; width: 72px; }
+    .cart-embedded .cart-item .remove-button { grid-column: 3; grid-row: 1; }
+}
+
 *,
 *::before,
 *::after {
