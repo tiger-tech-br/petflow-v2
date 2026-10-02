@@ -25,6 +25,9 @@ router.post("/frete/cotar", freteLimiter, optionalCustomerAuth, entregaControlle
 router.get("/pedidos/:id/rastreamento", customerAuthMiddleware, entregaController.acompanhar);
 router.post("/entregas/localizacao", entregaController.localizacao);
 router.delete("/entregas/localizacao", entregaController.localizacao);
+router.get("/entregas/viagem", entregaController.viagem);
+router.post("/entregas/rota", entregaController.rota);
+router.get("/entregas/mapa-config", entregaController.mapaConfig);
 const verificationLimiter = require("express-rate-limit")({
     windowMs: 15 * 60 * 1000, limit: 5,
     standardHeaders: true, legacyHeaders: false,

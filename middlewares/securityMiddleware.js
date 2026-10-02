@@ -17,6 +17,9 @@ const cookieParser = require("cookie-parser");
 const morgan = require("morgan");
 
 const rateLimit = require("express-rate-limit");
+const realtimePath = /^\/api\/(?:dashboard(?:\/notificacoes)?|public\/(?:clientes\/notificacoes|pedidos\/[^/]+\/rastreamento|entregas\/(?:localizacao|viagem|rota|mapa-config)))$/;
+const realtimeLimiter = rateLimit({ windowMs: 60000, limit: 120, standardHeaders: true, legacyHeaders: false,
+    message: { success: false, message: "Muitas atualizações. Aguarde um minuto para tentar novamente." } });
 
 /* ==================================================
    RATE LIMIT
@@ -33,6 +36,7 @@ const limiter = rateLimit({
     legacyHeaders: false,
 
     skip: request =>
+        realtimePath.test(request.path) ||
         request.method === "OPTIONS" ||
         (
             request.method === "GET" &&
@@ -102,24 +106,36 @@ function securityMiddleware(app) {
     app.use(helmet({
         contentSecurityPolicy: {
             directives: {
-                "frame-src": ["'self'", "https://www.openstreetmap.org"],
+                "frame-src": ["'self'", "https://*.google.com"],
                 "script-src": [
                     "'self'",
                     "'unsafe-inline'",
+                    req => ["/entregador", "/acompanhar-entrega"].includes(req.path) ? "'unsafe-eval'" : "'self'",
+                    req => ["/entregador", "/acompanhar-entrega"].includes(req.path) ? "blob:" : "'self'",
+                    "https://maps.googleapis.com",
+                    "https://maps.gstatic.com",
                     "https://cdnjs.cloudflare.com"
                 ],
                 "style-src": [
                     "'self'",
                     "'unsafe-inline'",
+                    "https://fonts.googleapis.com",
                     "https://cdnjs.cloudflare.com"
                 ],
                 "font-src": [
                     "'self'",
+                    "https://fonts.gstatic.com",
                     "https://cdnjs.cloudflare.com",
                     "data:"
                 ],
+                "img-src": ["'self'", "data:", "https:"],
+                "worker-src": ["'self'", "blob:"],
                 "connect-src": [
                     "'self'",
+                    "https://*.googleapis.com",
+                    "https://*.gstatic.com",
+                    "https://*.google.com",
+                    "data:", "blob:",
                     "https://viacep.com.br",
                     "https://api.pagseguro.com",
                     "https://sandbox.api.pagseguro.com"
@@ -127,6 +143,14 @@ function securityMiddleware(app) {
             }
         }
     }));
+
+    app.use((req, res, next) => {
+        if (["/entregador", "/acompanhar-entrega"].includes(req.path)) {
+            // Google valida a origem da chave pública; não transmite caminho nem fragmento privado.
+            res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+        }
+        next();
+    });
 
     /* Compressão */
 
@@ -151,6 +175,7 @@ function securityMiddleware(app) {
     /* Rate Limit */
 
     app.use(limiter);
+    app.use((req, res, next) => realtimePath.test(req.path) ? realtimeLimiter(req, res, next) : next());
 
 }
 

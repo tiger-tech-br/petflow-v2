@@ -175,14 +175,17 @@ function paymentApprovedTemplate({ name, orderId, total }) {
 function orderOutForDeliveryTemplate({ name, orderId }) {
     const safeName = escapeHtml(firstName(name) || "cliente");
     const orderLabel = shortId(orderId);
+    const trackingUrl = `${APP_URL}/acompanhar-entrega?pedido=${encodeURIComponent(orderId)}`;
 
     return {
         subject: `Pedido saiu para entrega #${orderLabel} - PetFlow`,
-        text: `Olá, ${safeName}. Seu pedido #${orderLabel} saiu para entrega.`,
+        text: `Olá, ${safeName}. Seu pedido #${orderLabel} saiu para entrega. Rastrear pedido: ${trackingUrl} . Entre na conta usada na compra para acompanhar.`,
         html: baseEmail(`
             <h1>Pedido saiu para entrega</h1>
             <p>Olá, ${safeName}.</p>
             <p>Seu pedido <strong>#${orderLabel}</strong> saiu para entrega e está a caminho.</p>
+            <p><a href="${escapeHtml(trackingUrl)}" style="display:inline-block;background:#04766d;color:#fff;padding:14px 22px;border-radius:8px;text-decoration:none;font-weight:bold">Rastrear pedido</a></p>
+            <p>Entre na conta usada na compra. O mapa será atualizado assim que o entregador iniciar a viagem e compartilhar o GPS.</p>
         `)
     };
 }

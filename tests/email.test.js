@@ -5,6 +5,14 @@ const envPath = require.resolve("../config/env");
 require.cache[envPath] = { exports: { RESEND_API_KEY: "re_test", EMAIL_FROM: "PetFlow <sender@example.com>", APP_URL: "https://example.com" } };
 const email = require("../services/emailService");
 const originalFetch = global.fetch;
+test("e-mail de saída inclui botão e URL de rastreamento do pedido", () => {
+    const id = "9c4ecf18-c1b1-45d9-ae3b-7392a2528617";
+    const template = email.orderOutForDeliveryTemplate({ name: "Cliente", orderId: id });
+    assert.match(template.html, /Rastrear pedido<\/a>/);
+    assert.ok(template.html.includes(`https://example.com/acompanhar-entrega?pedido=${id}`));
+    assert.ok(template.text.includes(`https://example.com/acompanhar-entrega?pedido=${id}`));
+    assert.ok(!template.html.includes("/entregador#"));
+});
 afterEach(() => { global.fetch = originalFetch; });
 
 test("Resend recebe remetente, conteúdo e chave de idempotência", async () => {

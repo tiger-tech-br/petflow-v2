@@ -5,7 +5,6 @@ document.addEventListener("DOMContentLoaded", () => {
     setupPublicSearch();
     setupCartCheckout();
     setupFavoritesPanel();
-    setupCustomerNotifications();
     setupCustomerHeader();
     setupNewsletterForm();
 });
@@ -16,7 +15,6 @@ let publicProducts = [];
 let publicCart = normalizeCartStorage();
 let publicFavorites = new Set(JSON.parse(sessionStorage.getItem("petflow_public_favorites") || "[]"));
 let publicCustomer = null;
-let publicNotifications = [];
 let currentSearchTerm = "";
 
 async function loadPublicCatalog() {
@@ -817,165 +815,10 @@ function setupCustomerHeader() {
         link.setAttribute("aria-label", "Entrar na conta");
     });
 
-    if (token) {
-        loadCustomerNotifications();
-    } else {
-        publicNotifications = [];
-        renderCustomerNotifications();
-    }
+    window.PetFlowNotifications?.refresh();
 }
 
-function setupCustomerNotifications() {
-    ensureCustomerNotificationsPanel();
-
-    const button = document.querySelector(".customer-notification-button");
-
-    button?.addEventListener("click", async event => {
-        event.preventDefault();
-        event.stopPropagation();
-
-        const panel = document.querySelector(".customer-notification-panel");
-        const willOpen = !panel?.classList.contains("active");
-
-        panel?.classList.toggle("active", willOpen);
-        button.setAttribute("aria-expanded", String(willOpen));
-
-        if (willOpen) {
-            await loadCustomerNotifications();
-            await markCustomerNotificationsRead();
-        }
-    });
-
-    document.addEventListener("click", event => {
-        if (!event.target.closest(".customer-notification-wrap")) {
-            closeCustomerNotifications();
-        }
-    });
-}
-
-function ensureCustomerNotificationsPanel() {
-    const button = document.querySelector(".customer-notification-button");
-
-    if (!button || button.closest(".customer-notification-wrap")) {
-        return;
-    }
-
-    const wrapper = document.createElement("div");
-    wrapper.className = "customer-notification-wrap";
-    button.parentNode.insertBefore(wrapper, button);
-    wrapper.appendChild(button);
-
-    const panel = document.createElement("div");
-    panel.className = "customer-notification-panel";
-    panel.innerHTML = `
-        <div class="customer-notification-header">
-            <strong>Notificações</strong>
-            <small id="customerNotificationStatus">Nenhuma nova</small>
-        </div>
-        <div class="customer-notification-list" id="customerNotificationList"></div>
-    `;
-    wrapper.appendChild(panel);
-}
-
-async function loadCustomerNotifications() {
-    if (!getCustomerToken()) {
-        return;
-    }
-
-    try {
-        const response = await fetch(`${PUBLIC_API}/clientes/notificacoes`, {
-            headers: {
-                Authorization: `Bearer ${getCustomerToken()}`
-            }
-        });
-        const payload = await response.json();
-
-        if (!response.ok) {
-            throw new Error(payload.message || "Não foi possível carregar notificações.");
-        }
-
-        publicNotifications = Array.isArray(payload.data) ? payload.data : [];
-        renderCustomerNotifications();
-    } catch {
-        publicNotifications = [];
-        renderCustomerNotifications();
-    }
-}
-
-async function markCustomerNotificationsRead() {
-    if (!getCustomerToken()) {
-        return;
-    }
-
-    try {
-        await fetch(`${PUBLIC_API}/clientes/notificacoes/lidas`, {
-            method: "PATCH",
-            headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${getCustomerToken()}`
-            }
-        });
-
-        publicNotifications = publicNotifications.map(item => ({
-            ...item,
-            lida: true
-        }));
-        renderCustomerNotifications();
-    } catch {
-        // A leitura pode ser tentada novamente na próxima abertura.
-    }
-}
-
-function renderCustomerNotifications() {
-    const button = document.querySelector(".customer-notification-button");
-    const list = document.getElementById("customerNotificationList");
-    const status = document.getElementById("customerNotificationStatus");
-
-    if (!button || !list || !status) {
-        return;
-    }
-
-    const unread = publicNotifications.filter(item => !item.lida).length;
-
-    if (unread > 0) {
-        button.dataset.count = String(unread);
-    } else {
-        delete button.dataset.count;
-    }
-
-    button.classList.toggle("has-count", unread > 0);
-    status.textContent = unread > 0
-        ? (unread === 1 ? "1 nova" : `${unread} novas`)
-        : "Nenhuma nova";
-
-    if (!publicNotifications.length) {
-        list.innerHTML = `
-            <div class="customer-notification-empty">
-                Nenhuma notificação por enquanto.
-            </div>
-        `;
-        return;
-    }
-
-    list.innerHTML = publicNotifications.map(item => `
-        <article class="customer-notification-item ${item.lida ? "" : "is-unread"}">
-            <i class="fa-regular fa-bell"></i>
-            <div>
-                <strong>${escapeHtml(item.titulo || "Notificação")}</strong>
-                <p>${escapeHtml(item.mensagem || "")}</p>
-                <small>${escapeHtml(formatNotificationDate(item.enviada_em))}</small>
-            </div>
-        </article>
-    `).join("");
-}
-
-function closeCustomerNotifications() {
-    const button = document.querySelector(".customer-notification-button");
-    const panel = document.querySelector(".customer-notification-panel");
-
-    panel?.classList.remove("active");
-    button?.setAttribute("aria-expanded", "false");
-}
+function closeCustomerNotifications() { window.PetFlowNotifications?.close(); }
 
 function insertLogoutLink(accountLink) {
     const logout = document.createElement("a");
@@ -1011,7 +854,6 @@ function clearCustomerSession() {
     localStorage.removeItem("petflow_public_favorites");
     localStorage.removeItem("petflow_public_cart");
     publicCustomer = null;
-    publicNotifications = [];
     publicFavorites = new Set();
     publicCart = {};
     updateHeaderCounters();

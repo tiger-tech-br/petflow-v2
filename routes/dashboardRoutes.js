@@ -14,6 +14,9 @@ const roleMiddleware = require("../middlewares/roleMiddleware");
 ============================================== */
 
 router.use(authMiddleware);
+const notifications = require("../controllers/adminNotificationController");
+router.get("/notificacoes", roleMiddleware("ADMIN", "GERENTE"), notifications.listar);
+router.patch("/notificacoes/lidas", roleMiddleware("ADMIN", "GERENTE"), notifications.ler);
 
 /* ==============================================
    DASHBOARD COMPLETO

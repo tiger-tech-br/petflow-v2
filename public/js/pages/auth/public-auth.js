@@ -61,7 +61,9 @@ function setupPublicLogin() {
             );
 
             saveCustomer(payload.data);
-            window.location.href = "/";
+            const next = new URLSearchParams(window.location.search).get("next");
+            // Aceita somente o destino de rastreamento local, impedindo redirecionamento externo.
+            window.location.href = next && /^\/acompanhar-entrega\?pedido=[0-9a-f-]{36}$/i.test(next) ? next : "/";
         } catch (error) {
             setStatus(status, error.message);
         }
@@ -323,7 +325,7 @@ function renderOrders(list, orders) {
                 ${renderOrderNotes(order)}
                 ${renderOrderTimeline(order.status)}
                 <p>Frete: ${currency(order.valor_frete || 0)}</p>
-                ${order.status === "SAIU_PARA_ENTREGA" ? `<a class="btn-secondary" href="/acompanhar-entrega?pedido=${encodeURIComponent(order.id)}">Acompanhar entrega por GPS</a>` : ""}
+                ${order.status === "SAIU_PARA_ENTREGA" ? `<a class="btn-secondary" href="/acompanhar-entrega?pedido=${encodeURIComponent(order.id)}">Rastrear pedido</a>` : ""}
                 ${renderContinuePayment(order)}
             </article>
         `;

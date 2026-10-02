@@ -1050,6 +1050,8 @@ async function notifications(request, response, next) {
                     mensagem,
                     tipo,
                     lida,
+                    venda_id,
+                    status_pedido,
                     enviada_em
                 FROM notificacoes
                 WHERE cliente_id = $1
@@ -1060,7 +1062,7 @@ async function notifications(request, response, next) {
                         AND c.empresa_id = $2
                   )
                 ORDER BY enviada_em DESC
-                LIMIT 20
+                LIMIT 100
             `,
             [
                 customer.id,
@@ -1084,6 +1086,10 @@ async function notifications(request, response, next) {
 async function markNotificationRead(request, response, next) {
 
     try {
+        const ids = request.body?.ids;
+        if (ids !== undefined && (!Array.isArray(ids) || ids.length > 100 || ids.some(id => !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id)))) {
+            return response.status(400).json({ success: false, message: "Notificações inválidas." });
+        }
 
         const customer = getAuthenticatedCustomer(
             request,
@@ -1114,11 +1120,13 @@ async function markNotificationRead(request, response, next) {
                       $2::uuid IS NULL
                       OR id = $2
                   )
+                  AND ($4::uuid[] IS NULL OR id = ANY($4::uuid[]))
             `,
             [
                 customer.id,
                 request.params.id || null,
-                customer.empresaId
+                customer.empresaId,
+                ids || null
             ]
         );
 

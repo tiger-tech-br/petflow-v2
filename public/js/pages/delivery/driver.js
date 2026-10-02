@@ -1,44 +1,88 @@
 "use strict";
 (() => {
-    const token = location.hash.slice(1);
-    const start = document.getElementById("startGps"), stop = document.getElementById("stopGps"), status = document.getElementById("gpsStatus");
-    let timer, running = false, pending = false;
-    if (!/^[a-f0-9]{64}$/.test(token)) { start.disabled = true; status.textContent = "Link inválido. Peça um novo link à loja."; return; }
+    const token = location.hash.slice(1), status = document.getElementById("gpsStatus");
+    const start = document.getElementById("startGps"), stop = document.getElementById("stopGps"), retryRoute = document.getElementById("refreshRoute");
+    const map = window.PetFlowDeliveryMap();
+    let running = false, pending = false, routePending = false, timer, generation = 0, trip, lastRouteAttempt = 0, wakeLock;
+    async function api(path, method = "GET", body) {
+        const response = await fetch(`/api/public/entregas/${path}`, { method, headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            cache: "no-store", signal: AbortSignal.timeout(15000), ...(body ? { body: JSON.stringify(body) } : {}) });
+        const payload = await response.json();
+        if (!response.ok) throw Object.assign(new Error(payload.message || "Não foi possível conectar à loja."), { status: response.status });
+        return payload.data;
+    }
+    function halt() {
+        running = false; generation++; clearInterval(timer); retryRoute.disabled = true;
+        wakeLock?.release().catch(() => {}); wakeLock = null;
+    }
+    async function keepScreenOn() {
+        try {
+            if (running && !document.hidden && navigator.wakeLock && (!wakeLock || wakeLock.released)) {
+                const lock = await navigator.wakeLock.request("screen");
+                if (running) wakeLock = lock; else await lock.release();
+            }
+        } catch { /* A tela pode ser mantida ativa manualmente. */ }
+    }
+    async function getRoute() {
+        if (!running || !trip?.atualizado_em || routePending) return;
+        routePending = true; retryRoute.disabled = true; lastRouteAttempt = Date.now();
+        const current = generation;
+        try {
+            const route = await api("rota", "POST");
+            if (!running || current !== generation) return;
+            trip.rota = route; map.update(trip);
+            document.getElementById("routeStatus").textContent = "Rota atualizada para você e para o cliente.";
+        } catch (error) {
+            if (current !== generation) return;
+            document.getElementById("routeStatus").textContent = error.message;
+            if ([401,410].includes(error.status)) { halt(); start.disabled = stop.disabled = true; map.hide(); status.textContent = error.message; }
+        } finally { routePending = false; retryRoute.disabled = !running; }
+    }
     async function publish() {
-        if (!running || pending) return;
+        if (!running || pending || document.hidden) return;
         pending = true;
+        const current = generation;
         try {
             const position = await new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 }));
-            if (!running) return;
-            const response = await fetch("/api/public/entregas/localizacao", {
-                method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(15000),
-                body: JSON.stringify({ latitude: position.coords.latitude, longitude: position.coords.longitude, precisao: position.coords.accuracy })
-            });
-            const payload = await response.json();
-            if (!response.ok) {
-                if ([401,410].includes(response.status)) { running = false; clearInterval(timer); start.disabled = true; stop.disabled = true; status.textContent = payload.message || "Entrega encerrada. Peça outro link à loja."; }
-                throw new Error(payload.message || "Não foi possível compartilhar a localização.");
-            }
-            if (running) status.textContent = `Localização enviada às ${new Date().toLocaleTimeString("pt-BR")}. Precisão aproximada: ${Math.round(position.coords.accuracy)} m.`;
+            if (!running || current !== generation) return;
+            const coords = { latitude: position.coords.latitude, longitude: position.coords.longitude, precisao: position.coords.accuracy };
+            await api("localizacao", "POST", coords);
+            if (!running || current !== generation) return;
+            trip = { ...trip, ...coords, precisao_m: coords.precisao, atualizado_em: new Date().toISOString() };
+            status.textContent = `Viagem em andamento. GPS enviado às ${new Date().toLocaleTimeString("pt-BR")}. Precisão aproximada: ${Math.round(coords.precisao)} m.`;
+            map.update(trip);
+            if (Date.now() - lastRouteAttempt > (trip.rota ? 300000 : 60000)) getRoute();
         } catch (error) {
-            if (!running) return;
-            if (error.code === 1) { running = false; clearInterval(timer); start.disabled = false; }
-            status.textContent = error.code === 1 ? "Localização não autorizada. Libere a permissão no navegador e toque em Iniciar." : error.code === 2 || error.code === 3 ? "Não foi possível obter o GPS. Confira o sinal; tentaremos novamente." : error.message;
+            if (current !== generation) return;
+            status.textContent = error.code === 1 ? "Acesso ao GPS negado. Permita a localização nas configurações do navegador e tente iniciar novamente." : `GPS sem atualização: ${error.message || "não foi possível obter a posição"}.`;
+            if ([401,410].includes(error.status)) { halt(); start.disabled = stop.disabled = true; map.hide(); }
+            else if (error.code === 1) { halt(); start.disabled = false; }
         } finally { pending = false; }
     }
-    start.addEventListener("click", () => {
-        if (!navigator.geolocation || !window.isSecureContext) { status.textContent = "O GPS requer navegador compatível e acesso por HTTPS."; return; }
-        running = true; start.disabled = true; stop.disabled = false;
-        status.textContent = "Obtendo sua localização...";
-        publish(); timer = setInterval(publish, 30000);
+    start.addEventListener("click", async () => {
+        if (!navigator.geolocation || !window.isSecureContext) { status.textContent = "Abra este link em HTTPS em um celular com GPS."; return; }
+        start.disabled = true; status.textContent = "Preparando viagem...";
+        const current = ++generation;
+        try {
+            trip = await api("viagem");
+            if (current !== generation) return;
+            running = true; stop.disabled = false; retryRoute.hidden = false;
+            map.update({ ...trip, latitude: null, longitude: null });
+            status.textContent = "Permita a localização para iniciar a viagem e mostrar o mapa.";
+            keepScreenOn(); publish(); timer = setInterval(publish, 15000);
+        } catch (error) { status.textContent = error.message; start.disabled = [401,410].includes(error.status); }
     });
     stop.addEventListener("click", async () => {
-        running = false; clearInterval(timer); start.disabled = true;
-        try {
-            const response = await fetch("/api/public/entregas/localizacao", { method: "DELETE", headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(15000) });
-            if (!response.ok && response.status !== 410) throw new Error();
-            stop.disabled = true; status.textContent = "Compartilhamento encerrado. A última posição foi removida. Para reiniciar, peça um novo link à loja.";
-            history.replaceState(null, "", location.pathname);
-        } catch { status.textContent = "GPS parado neste celular, mas não conseguimos encerrar o link no servidor. Confira a internet e toque em Parar novamente."; }
+        halt(); stop.disabled = true; start.disabled = true; map.hide();
+        status.textContent = "GPS parado neste aparelho. Encerrando o link...";
+        try { await api("localizacao", "DELETE"); history.replaceState(null, "", location.pathname); status.textContent = "Compartilhamento encerrado. Para outra viagem, peça um novo link à loja."; }
+        catch (error) {
+            if ([401,410].includes(error.status)) status.textContent = "Link já encerrado ou expirado.";
+            else { status.textContent = "GPS parado neste aparelho. Não foi possível encerrar o link no servidor; tente o botão novamente."; stop.disabled = false; }
+        }
     });
+    retryRoute.addEventListener("click", getRoute);
+    document.addEventListener("visibilitychange", () => { if (running && !document.hidden) { keepScreenOn(); publish(); } });
+    window.addEventListener("pagehide", halt);
+    if (!/^[a-f0-9]{64}$/.test(token)) { start.disabled = true; status.textContent = "Link inválido. Peça à loja o link completo desta entrega."; }
 })();

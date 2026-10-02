@@ -4,7 +4,6 @@ document.addEventListener("DOMContentLoaded", () => {
     requireDashboardAuth();
     setupDashboardDate();
     setupDashboardNavigation();
-    setupDashboardNotifications();
     bindDashboardActions();
     loadDashboard();
     window.setInterval(loadDashboard, 30000);
@@ -12,11 +11,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
 const DASHBOARD_API = "/api";
 
-let dashboardNotifications = [];
-let unreadNotifications = 0;
-let audioUnlocked = false;
-let dashboardKnownOrderIds = new Set();
-let dashboardLoadedOnce = false;
 
 function requireDashboardAuth() {
     if (!sessionStorage.getItem("token")) {
@@ -110,38 +104,6 @@ function bindDashboardActions() {
     });
 }
 
-function setupDashboardNotifications() {
-    const button = document.getElementById("notificationButton");
-    const panel = document.getElementById("notificationPanel");
-
-    if (!button || !panel) {
-        return;
-    }
-
-    button.addEventListener("click", event => {
-        event.stopPropagation();
-        audioUnlocked = true;
-
-        const willOpen = !panel.classList.contains("active");
-        panel.classList.toggle("active", willOpen);
-        button.setAttribute("aria-expanded", String(willOpen));
-
-        if (willOpen) {
-            unreadNotifications = 0;
-            renderNotifications();
-        }
-    });
-
-    document.addEventListener("click", event => {
-        if (!event.target.closest(".notification-menu")) {
-            panel.classList.remove("active");
-            button.setAttribute("aria-expanded", "false");
-        }
-    });
-
-    renderNotifications();
-}
-
 async function loadDashboard() {
     try {
         const data = await apiGet("/dashboard");
@@ -151,7 +113,6 @@ async function loadDashboard() {
         renderSales(dashboard.ultimasVendas || []);
         renderSuppliers(dashboard.estoqueBaixo || [], dashboard.ultimasCompras || []);
         updateProfileName();
-        updateNotifications(dashboard.ultimasVendas || []);
     } catch (error) {
         if (String(error.message).includes("401")) {
             window.location.href = "/admin/index.html";
@@ -270,101 +231,6 @@ function renderSuppliers(lowStock, purchases) {
     `).join("");
 }
 
-function updateNotifications(sales) {
-    const notifications = sales.slice(0, 5).map(item => ({
-        id: String(item.id),
-        title: `Pedido #${shortId(item.id)} recebido`,
-        text: buildOrderNotificationText(item),
-        details: buildOrderNotificationDetails(item)
-    }));
-    let hasNewNotifications = false;
-
-    if (!dashboardLoadedOnce) {
-        unreadNotifications = 0;
-        dashboardKnownOrderIds = new Set(notifications.map(item => item.id));
-        dashboardLoadedOnce = true;
-    } else {
-        const newNotifications = notifications.filter(
-            item => !dashboardKnownOrderIds.has(item.id)
-        );
-
-        if (newNotifications.length) {
-            hasNewNotifications = true;
-            unreadNotifications += newNotifications.length;
-            newNotifications.forEach(item => dashboardKnownOrderIds.add(item.id));
-        }
-    }
-
-    dashboardNotifications = notifications;
-    renderNotifications();
-
-    if (hasNewNotifications && audioUnlocked) {
-        playNotificationSound();
-    }
-}
-
-function renderNotifications() {
-    const count = document.getElementById("notificationCount");
-    const status = document.getElementById("notificationStatus");
-    const list = document.getElementById("notificationList");
-    const button = document.getElementById("notificationButton");
-
-    if (!count || !status || !list || !button) {
-        return;
-    }
-
-    if (unreadNotifications > 0) {
-        count.textContent = String(unreadNotifications);
-        count.hidden = false;
-        status.textContent = unreadNotifications === 1
-            ? "1 novo pedido"
-            : `${unreadNotifications} novos pedidos`;
-    } else {
-        count.textContent = "";
-        count.hidden = true;
-        status.textContent = "Nenhuma nova";
-    }
-
-    button.classList.toggle("has-notification", unreadNotifications > 0);
-
-    if (!dashboardNotifications.length) {
-        list.innerHTML = emptyState("Nenhuma notificação nova.");
-        return;
-    }
-
-    list.innerHTML = dashboardNotifications.map(item => `
-        <article>
-            <i class="fa-solid fa-bag-shopping"></i>
-            <div>
-                <strong>${escapeHtml(item.title)}</strong>
-                <span>${escapeHtml(item.text)}</span>
-                ${item.details ? `<small>${escapeHtml(item.details)}</small>` : ""}
-            </div>
-        </article>
-    `).join("");
-}
-
-function buildOrderNotificationText(item) {
-    const contato =
-        item.cliente_whatsapp ||
-        item.cliente_telefone ||
-        item.cliente_email ||
-        "contato não informado";
-
-    return `${item.cliente || "Cliente avulso"} - ${contato} - ${currency(item.valor_total)}`;
-}
-
-function buildOrderNotificationDetails(item) {
-    return [
-        item.cliente_endereco,
-        item.cliente_numero,
-        item.cliente_complemento,
-        item.cliente_bairro,
-        item.cliente_cidade,
-        item.cliente_estado
-    ].filter(Boolean).join(", ");
-}
-
 function updateProfileName() {
     const profile = document.querySelector(".admin-profile span");
 
@@ -408,29 +274,6 @@ function renderDashboardError(message) {
     });
 }
 
-function playNotificationSound() {
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-
-    if (!AudioContext) {
-        return;
-    }
-
-    const context = new AudioContext();
-    const gain = context.createGain();
-    gain.gain.setValueAtTime(0.0001, context.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.18, context.currentTime + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.42);
-    gain.connect(context.destination);
-
-    [740, 980].forEach((frequency, index) => {
-        const oscillator = context.createOscillator();
-        oscillator.type = "sine";
-        oscillator.frequency.setValueAtTime(frequency, context.currentTime + index * 0.12);
-        oscillator.connect(gain);
-        oscillator.start(context.currentTime + index * 0.12);
-        oscillator.stop(context.currentTime + index * 0.12 + 0.18);
-    });
-}
 
 function emptyState(message) {
     return `<div class="dashboard-empty">${escapeHtml(message)}</div>`;

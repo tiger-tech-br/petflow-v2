@@ -29,9 +29,18 @@ test("cadastro, confirmação, compra, webhook e estoque em PostgreSQL isolado",
         process.env.APP_URL = "http://localhost";
         process.env.NODE_ENV = "test";
         process.env.GOOGLE_MAPS_API_KEY = "test-maps-key";
-        global.fetch = async (url, options) => String(url).startsWith("https://routes.googleapis.com/")
-            ? { ok: true, json: async () => ({ routes: [{ distanceMeters: 2500 }] }) }
-            : originalFetch(url, options);
+        process.env.GOOGLE_MAPS_BROWSER_API_KEY = "test-public-browser-key";
+        let routeCalls = 0;
+        global.fetch = async (url, options) => {
+            if (!String(url).startsWith("https://routes.googleapis.com/")) return originalFetch(url, options);
+            if (options.headers["X-Goog-FieldMask"].includes("polyline")) {
+                routeCalls++;
+                const body = JSON.parse(options.body);
+                assert.equal(body.origin.location.latLng.latitude, -23.66);
+                assert.match(body.destination.address, /Rua de Teste/, "Rota usa endereço congelado do pedido, não perfil editado");
+            }
+            return { ok: true, json: async () => ({ routes: [{ distanceMeters: 2500, duration: "500s", polyline: { encodedPolyline: "test-route" }, legs: [{ endLocation: { latLng: { latitude: -23.67, longitude: -46.56 } } }] }] }) };
+        };
         require.cache[require.resolve("../config/db")] = { exports: { pool } };
         const email = require("../services/emailService");
         const sent = [];
@@ -42,7 +51,8 @@ test("cadastro, confirmação, compra, webhook e estoque em PostgreSQL isolado",
             sent.push(payload);
             return { id: "test-email" };
         };
-        email.sendOptionalEmail = async () => ({ id: "test-optional" });
+        const optionalEmails = [];
+        email.sendOptionalEmail = async payload => { optionalEmails.push(payload); return { id: "test-optional" }; };
         let checkouts = 0;
         require("axios").create = () => ({
             post: async (url, checkout) => {
@@ -59,6 +69,12 @@ test("cadastro, confirmação, compra, webhook e estoque em PostgreSQL isolado",
         server = app.listen(0, "127.0.0.1");
         await new Promise(resolve => server.once("listening", resolve));
         const base = `http://127.0.0.1:${server.address().port}`;
+        const mapPage = await fetch(base + "/acompanhar-entrega");
+        assert.equal(mapPage.status,200);
+        assert.equal(mapPage.headers.get("referrer-policy"),"strict-origin-when-cross-origin");
+        assert.ok(mapPage.headers.get("content-security-policy").includes("'unsafe-eval'"));
+        const homePage = await fetch(base + "/");
+        assert.ok(!homePage.headers.get("content-security-policy").includes("'unsafe-eval'"), "Exceção do Google restrita às páginas de mapa");
         async function request(path, method = "GET", body, token, headers = {}) {
             const res = await fetch(base + path, { method, headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}), ...headers }, ...(body ? { body: JSON.stringify(body) } : {}) });
             return { status: res.status, body: await res.json() };
@@ -68,6 +84,7 @@ test("cadastro, confirmação, compra, webhook e estoque em PostgreSQL isolado",
         assert.equal(res.status, 503);
         assert.equal((await pool.query("SELECT COUNT(*)::int AS n FROM clientes")).rows[0].n, 0, "Envio falhou: nenhum cliente órfão");
         assert.equal((await pool.query("SELECT COUNT(*)::int AS n FROM usuarios_clientes")).rows[0].n, 0);
+        assert.equal((await pool.query("SELECT COUNT(*)::int AS n FROM notificacoes_admin")).rows[0].n, 0, "Cadastro revertido não deixa aviso órfão");
         emailFailure = false;
         res = await request("/api/public/clientes/cadastro", "POST", customer);
         assert.equal(res.status, 201, JSON.stringify(res.body));
@@ -82,6 +99,7 @@ test("cadastro, confirmação, compra, webhook e estoque em PostgreSQL isolado",
         assert.equal(res.status, 200);
         const token = res.body.data.token;
         const empresaId = res.body.data.user.empresaId;
+        const adminId = (await pool.query("INSERT INTO usuarios(nome,email,senha_hash,perfil,empresa_id) VALUES ('Admin','admin@example.invalid','test','ADMIN',$1) RETURNING id", [empresaId])).rows[0].id;
         assert.equal((await request("/api/public/clientes/me", "GET", null, token)).status, 200);
         assert.equal((await request("/api/public/clientes/cadastro", "POST", customer)).status, 409);
         const categoria = (await pool.query("INSERT INTO categorias (empresa_id,nome) VALUES ($1,'Teste') RETURNING id", [empresaId])).rows[0].id;
@@ -141,25 +159,64 @@ test("cadastro, confirmação, compra, webhook e estoque em PostgreSQL isolado",
         assert.equal((await pool.query("SELECT status FROM vendas WHERE id=$1",[order])).rows[0].status, "PAGAMENTO_APROVADO");
         assert.equal(Number((await pool.query("SELECT quantidade FROM estoque WHERE produto_id=$1",[product])).rows[0].quantidade),8);
         const jwt = require("jsonwebtoken");
-        const adminToken = jwt.sign({ id: crypto.randomUUID(), empresaId, cargo: "ADMIN" }, process.env.JWT_SECRET);
+        const adminToken = jwt.sign({ id: adminId, empresaId, cargo: "ADMIN" }, process.env.JWT_SECRET);
+        const noticesPath = "/api/dashboard/notificacoes";
+        assert.equal((await request(noticesPath)).status, 401);
+        assert.equal((await request(noticesPath, "GET", null, token)).status, 403);
+        const notices = (await request(noticesPath, "GET", null, adminToken)).body.data;
+        assert.equal(notices.filter(n => n.cliente_id && !n.venda_id).length, 1, "Novo cadastro gera aviso persistente");
+        assert.equal(notices.filter(n => n.venda_id).length, 2, "Preserva avisos de novos pedidos");
+        assert.ok(notices.every(n => !n.lida));
+        assert.equal((await request(noticesPath + "/lidas", "PATCH", { ids: [notices[0].id] }, adminToken)).status, 200);
+        assert.equal((await request(noticesPath, "GET", null, adminToken)).body.data.filter(n => n.lida).length, 1, "Leitura persiste ao consultar novamente");
+        const otherAdmin = jwt.sign({ id: crypto.randomUUID(), empresaId, cargo: "ADMIN" }, process.env.JWT_SECRET);
+        assert.ok((await request(noticesPath, "GET", null, otherAdmin)).body.data.every(n => !n.lida), "Leitura é individual por administrador");
+        const otherStore = jwt.sign({ id: adminId, empresaId: crypto.randomUUID(), cargo: "ADMIN" }, process.env.JWT_SECRET);
+        assert.equal((await request(noticesPath, "GET", null, otherStore)).body.data.length, 0);
+        assert.equal((await request(`/api/vendas/${guestOrder.body.data.id}/status`, "PATCH", { status: "SAIU_PARA_ENTREGA" }, adminToken)).status, 409, "Não envia pedido sem pagamento");
         const linkEndpoint = `/api/vendas/${order}/rastreamento`;
         assert.equal((await request(linkEndpoint, "POST", {}, adminToken)).status, 409, "GPS só disponível em entrega");
-        await pool.query("UPDATE vendas SET status='SAIU_PARA_ENTREGA' WHERE id=$1", [order]);
+        assert.equal((await request(`/api/vendas/${order}/status`, "PATCH", { status: "EM_SEPARACAO" }, adminToken)).status, 200);
+        const transitions = await Promise.all([1,2].map(() => request(`/api/vendas/${order}/status`, "PATCH", { status: "SAIU_PARA_ENTREGA" }, adminToken)));
+        assert.ok(transitions.every(r => r.status === 200));
+        assert.equal(optionalEmails.filter(e => e.html.includes("Rastrear pedido")).length, 1, "Cliques concorrentes não duplicam e-mail de entrega");
+        const customerNotices = (await request("/api/public/clientes/notificacoes", "GET", null, token)).body.data;
+        for (const status of ["AGUARDANDO_PAGAMENTO","PAGAMENTO_APROVADO","EM_SEPARACAO","SAIU_PARA_ENTREGA"]) {
+            assert.equal(customerNotices.filter(n => n.venda_id === order && n.status_pedido === status).length, 1, `Uma notificação para ${status}`);
+        }
+        assert.equal((await request("/api/public/clientes/notificacoes/lidas", "PATCH", { ids: [customerNotices[0].id] }, token)).status, 200);
+        assert.ok((await request("/api/public/clientes/notificacoes", "GET", null, token)).body.data.find(n => n.id === customerNotices[0].id).lida);
+        const noticeCount = (await pool.query("SELECT COUNT(*)::int n FROM notificacoes")).rows[0].n;
         const link = await request(linkEndpoint, "POST", {}, adminToken);
         assert.equal(link.status, 200, JSON.stringify(link.body));
         const driverToken = new URL(link.body.data.url).hash.slice(1);
         const position = { latitude: -23.66, longitude: -46.55, precisao: 10 };
         const gps = "/api/public/entregas/localizacao";
+        assert.equal((await request("/api/public/entregas/viagem")).status, 401);
+        const trip = await request("/api/public/entregas/viagem", "GET", null, driverToken);
+        assert.equal(trip.body.data.endereco_entrega.endereco, "Rua de Teste");
+        assert.equal(trip.body.data.token_hash, undefined);
+        const config = await request("/api/public/entregas/mapa-config");
+        assert.deepEqual(config.body.data, { browserKey: "test-public-browser-key" }, "Não expõe chave privada de Routes");
+        assert.equal((await request("/api/public/entregas/rota", "POST", {}, driverToken)).status, 409, "Exige GPS antes de calcular rota");
         assert.equal((await request(gps, "POST", position)).status, 401);
         assert.equal((await request(gps, "POST", { ...position, latitude: 91 }, driverToken)).status, 400);
         assert.equal((await request(gps, "POST", position, driverToken)).status, 200);
+        assert.equal((await request("/api/public/entregas/rota", "POST", {}, driverToken)).status, 200);
+        assert.equal((await request("/api/public/entregas/rota", "POST", {}, driverToken)).status, 200);
+        assert.equal(routeCalls, 1, "Consultas repetidas reaproveitam rota e limitam custo");
         const tracking = `/api/public/pedidos/${order}/rastreamento`;
         assert.equal((await request(tracking)).status, 401);
         const otherToken = jwt.sign({ id: crypto.randomUUID(), empresaId, type: "customer" }, process.env.JWT_SECRET);
         assert.equal((await request(tracking, "GET", null, otherToken)).status, 404);
         assert.equal((await request(tracking, "GET", null, token)).body.data.latitude, position.latitude);
+        assert.equal((await request(tracking, "GET", null, token)).body.data.rota.polyline, "test-route", "Cliente recebe a mesma rota do entregador");
+        assert.equal((await request("/api/public/clientes/notificacoes", "GET", null, otherToken)).body.data.length, 0, "Outro cliente não vê notificações");
         const replacement = await request(linkEndpoint, "POST", {}, adminToken);
         const replacementToken = new URL(replacement.body.data.url).hash.slice(1);
+        assert.equal((await request("/api/public/entregas/viagem", "GET", null, driverToken)).status, 410);
+        assert.equal((await request("/api/public/entregas/rota", "POST", {}, driverToken)).status, 410);
+        assert.equal((await request(tracking, "GET", null, token)).body.data.rota, null, "Novo link remove rota da viagem anterior");
         assert.equal((await request(gps, "POST", position, driverToken)).status, 410, "Rotação revoga token anterior");
         assert.equal((await request(gps, "POST", position, replacementToken)).status, 200);
         assert.equal((await request(gps, "DELETE", null, replacementToken)).status, 200);
@@ -168,7 +225,8 @@ test("cadastro, confirmação, compra, webhook e estoque em PostgreSQL isolado",
         const lastLink = await request(linkEndpoint, "POST", {}, adminToken);
         const lastDriverToken = new URL(lastLink.body.data.url).hash.slice(1);
         await request(gps, "POST", position, lastDriverToken);
-        await pool.query("UPDATE vendas SET status='ENTREGUE' WHERE id=$1",[order]);
+        assert.equal((await request(`/api/vendas/${order}/status`, "PATCH", { status: "ENTREGUE" }, adminToken)).status, 200);
+        assert.equal((await request(`/api/vendas/${order}/status`, "PATCH", { status: "SAIU_PARA_ENTREGA" }, adminToken)).status, 409);
         assert.equal((await request(gps, "POST", position, lastDriverToken)).status, 410);
         assert.equal((await pool.query("SELECT COUNT(*)::int AS n FROM entrega_rastreamento WHERE venda_id=$1", [order])).rows[0].n, 0, "Entrega encerra rastreamento e apaga GPS");
         assert.equal((await request("/api/public/pagamentos/webhook", "POST", event, null, { "x-authenticity-token": signature })).status,200);
@@ -180,6 +238,7 @@ test("cadastro, confirmação, compra, webhook e estoque em PostgreSQL isolado",
             await pool.query(fs.readFileSync(`database/sql/${file}`, "utf8"));
         }
         assert.equal(Number((await pool.query("SELECT valor_final FROM vendas WHERE id=$1", [order])).rows[0].valor_final), 28.5);
+        assert.equal((await pool.query("SELECT COUNT(*)::int n FROM notificacoes")).rows[0].n, noticeCount + 1, "Segundo deploy não duplica avisos; somente Entregue acrescenta um");
         const pagbank = require("../services/pagseguroService");
         assert.equal(pagbank.mapStatusToVenda("AUTHORIZED"), "AGUARDANDO_PAGAMENTO");
         assert.equal(pagbank.mapStatusToVenda("EXPIRED"), "CANCELADA");

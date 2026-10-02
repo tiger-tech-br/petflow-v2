@@ -36,7 +36,10 @@
         }
 
         bindEvents();
-        loadData();
+        loadData().then(() => {
+            const order = new URLSearchParams(location.search).get("pedido");
+            if (isSalesPage && /^[0-9a-f-]{36}$/i.test(order || "")) showSaleDetails(order);
+        });
     });
 
     function setupAdminNavigation() {
@@ -1023,6 +1026,11 @@
                     <button class="btn" type="button" id="createDriverLink">Gerar link para o entregador</button>
                     <p>O link vale por 12 horas. Gerar outro invalida o anterior. Envie apenas ao entregador deste pedido.</p>
                     <input class="form-control" id="driverLink" aria-label="Link do entregador" readonly hidden>
+                    <div id="driverLinkActions" hidden>
+                        <button class="btn" type="button" id="copyDriverLink">Copiar link</button>
+                        <button class="btn" type="button" id="shareDriverLink">Compartilhar com entregador</button>
+                        <a class="btn" id="openDriverLink" target="_blank" rel="noopener noreferrer">Abrir viagem neste aparelho</a>
+                    </div>
                     <span id="driverLinkStatus" role="status"></span>
                 </div>` : ""}
 
@@ -1152,15 +1160,36 @@
                 const payload = await apiPost(`/vendas/${sale.id}/rastreamento`, {});
                 const input = container.querySelector("#driverLink");
                 input.value = payload.data.url; input.hidden = false;
+                container.querySelector("#driverLinkActions").hidden = false;
+                container.querySelector("#openDriverLink").href = payload.data.url;
                 input.focus(); input.select();
-                status.textContent = "Link pronto. Copie e envie ao entregador. Ele deve abrir no celular e tocar em Iniciar compartilhamento.";
+                status.textContent = "Link pronto. Compartilhe com o entregador. Ele deve abrir no próprio celular e tocar em Iniciar viagem. O cliente já pode acessar Rastrear pedido pelo e-mail e pelas notificações.";
             } catch (error) { status.textContent = error.message; }
             finally { button.disabled = false; }
+        });
+        const copyLink = async () => {
+            const input = container.querySelector("#driverLink"), message = container.querySelector("#driverLinkStatus");
+            try { await navigator.clipboard.writeText(input.value); message.textContent = "Link copiado. Envie apenas ao entregador deste pedido."; }
+            catch { input.focus(); input.select(); message.textContent = "Selecione e copie o link acima."; }
+        };
+        container.querySelector("#copyDriverLink")?.addEventListener("click", copyLink);
+        container.querySelector("#shareDriverLink")?.addEventListener("click", async () => {
+            if (!navigator.share) return copyLink();
+            try { await navigator.share({ title: "PetFlow — iniciar viagem", text: "Abra no celular da entrega e toque em Iniciar viagem. Link exclusivo do entregador.", url: container.querySelector("#driverLink").value }); }
+            catch (error) { if (error.name !== "AbortError") await copyLink(); }
         });
     }
 
     function buildSaleStatusOptions(currentStatus) {
+        const allowed = {
+            AGUARDANDO_PAGAMENTO: ["PAGAMENTO_APROVADO","CANCELADA"],
+            PAGAMENTO_APROVADO: ["EM_SEPARACAO","SAIU_PARA_ENTREGA","CANCELADA"],
+            EM_SEPARACAO: ["SAIU_PARA_ENTREGA","CANCELADA"],
+            SAIU_PARA_ENTREGA: ["ENTREGUE","CANCELADA"],
+            ENTREGUE: ["FINALIZADA"], FINALIZADA: [], CANCELADA: []
+        };
         return getSaleStatusOptions()
+            .filter(option => option.value === currentStatus || allowed[currentStatus]?.includes(option.value))
             .map(option => {
                 const selected =
                     String(option.value) === String(currentStatus)

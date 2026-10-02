@@ -431,31 +431,24 @@ const VendaService = {
             );
         }
 
-        const vendaAtual = await VendaModel.buscarPorId(
-            vendaId,
-            empresaId
-        );
-
-        if (!vendaAtual) {
-            return null;
-        }
-
-        if (vendaAtual.status === status) {
-            return vendaAtual;
-        }
-
-        const vendaAtualizada = await VendaModel.atualizarStatus(
-            vendaId,
-            empresaId,
-            status
-        );
-
-        await enviarEmailStatusPedido(
-            vendaAtualizada,
-            status
-        );
-
-        return vendaAtualizada;
+        const result = await db.transaction(async client => {
+            const { rows } = await client.query("SELECT * FROM vendas WHERE id=$1 AND empresa_id=$2 FOR UPDATE", [vendaId,empresaId]);
+            const current = rows[0];
+            if (!current) return null;
+            if (current.status === status) return { sale: current, changed: false };
+            const allowed = {
+                AGUARDANDO_PAGAMENTO: ["CANCELADA"],
+                PAGAMENTO_APROVADO: ["EM_SEPARACAO","SAIU_PARA_ENTREGA","CANCELADA"],
+                EM_SEPARACAO: ["SAIU_PARA_ENTREGA","CANCELADA"],
+                SAIU_PARA_ENTREGA: ["ENTREGUE","CANCELADA"],
+                ENTREGUE: ["FINALIZADA"], FINALIZADA: [], CANCELADA: []
+            };
+            if (!allowed[current.status]?.includes(status)) throw Object.assign(new Error("Esta mudança de status não é permitida. Confira a etapa atual e a confirmação do pagamento."), { status: 409 });
+            return { sale: await VendaModel.atualizarStatus(vendaId,empresaId,status,client), changed: true };
+        });
+        if (!result) return null;
+        if (result.changed) await enviarEmailStatusPedido(result.sale,status);
+        return result.sale;
 
     },
 
