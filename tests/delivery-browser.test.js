@@ -72,7 +72,7 @@ function adminTrackingHarness(token = "admin-session") {
         document:{hidden:false,getElementById:id=>elements[id],addEventListener(){}},
         sessionStorage:{getItem:key=>key === "token" ? token : "customer-session"},
         navigator:{geolocation:{getCurrentPosition(){assert.fail("Administrador não deve solicitar GPS");},watchPosition(){assert.fail("Administrador não deve acompanhar seu próprio GPS");}}},
-        setInterval(fn,delay){assert.equal(delay,15000);tick=fn;},
+        setInterval(fn,delay){assert.equal(delay,5000);tick=fn;},
         PetFlowDeliveryMap:()=>({update(d){updates.push(d);},hide(){hides++;}}),
         fetch:async(url,options)=>{calls.push({url,options});return {ok:true,json:async()=>({data})};}
     };

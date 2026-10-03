@@ -11,7 +11,7 @@
         const back = document.getElementById("trackingBack");
         back.href = `/admin/pages/vendas/vendas.html${id ? `?pedido=${encodeURIComponent(id)}` : ""}`;
         back.textContent = "← Voltar ao pedido";
-        document.getElementById("trackingDescription").textContent = "Veja o GPS do entregador e a rota até o cliente. Atualizamos a posição a cada 15 segundos enquanto esta página estiver visível. Esta tela apenas acompanha a entrega.";
+        document.getElementById("trackingDescription").textContent = "Veja o GPS do entregador e a rota até o cliente. Atualizamos a posição a cada 5 segundos enquanto esta página estiver visível. Esta tela apenas acompanha a entrega.";
         login.textContent = "Entrar no painel administrativo";
     }
     let pending = false, ended = false;
@@ -41,5 +41,5 @@
         } catch (error) { status.textContent = `${error.message} A posição atual não pôde ser confirmada.`; map.hide(); updated.textContent = ""; }
         finally { pending = false; }
     }
-    refresh(); setInterval(refresh,15000); document.addEventListener("visibilitychange",refresh);
+    refresh(); setInterval(refresh,5000); document.addEventListener("visibilitychange",refresh);
 })();

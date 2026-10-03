@@ -69,7 +69,7 @@
             running = true; stop.disabled = false; retryRoute.hidden = false;
             map.update({ ...trip, latitude: null, longitude: null });
             status.textContent = "Permita a localização para iniciar a viagem e mostrar o mapa.";
-            keepScreenOn(); publish(); timer = setInterval(publish, 15000);
+            keepScreenOn(); publish(); timer = setInterval(publish, 5000);
         } catch (error) { status.textContent = error.message; start.disabled = [401,410].includes(error.status); }
     });
     stop.addEventListener("click", async () => {
