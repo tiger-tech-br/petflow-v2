@@ -63,6 +63,50 @@ test("cliente exibe última posição com alerta de atraso e remove mapa ao conc
     assert.equal(updates.at(-1).rota.polyline,"route");assert.match(elements.trackingStatus.textContent,/Sem atualização recente/);
     data={status:"ENTREGUE"};await tick();assert.match(elements.trackingStatus.textContent,/Pedido entregue/);assert.equal(hides,1);
 });
+function adminTrackingHarness(token = "admin-session") {
+    const elements = Object.fromEntries(["trackingStatus","trackingUpdated","trackingLogin","trackingBack","trackingTitle","trackingDescription"].map(id => [id,element()]));
+    const calls = [], updates = []; let hides = 0, tick;
+    let data = {status:"SAIU_PARA_ENTREGA",latitude:null,longitude:null,atualizado_em:null};
+    const ctx = {URLSearchParams,AbortSignal,Date,
+        location:{search:"?pedido=example",pathname:"/admin/acompanhar-entrega"},
+        document:{hidden:false,getElementById:id=>elements[id],addEventListener(){}},
+        sessionStorage:{getItem:key=>key === "token" ? token : "customer-session"},
+        navigator:{geolocation:{getCurrentPosition(){assert.fail("Administrador não deve solicitar GPS");},watchPosition(){assert.fail("Administrador não deve acompanhar seu próprio GPS");}}},
+        setInterval(fn,delay){assert.equal(delay,15000);tick=fn;},
+        PetFlowDeliveryMap:()=>({update(d){updates.push(d);},hide(){hides++;}}),
+        fetch:async(url,options)=>{calls.push({url,options});return {ok:true,json:async()=>({data})};}
+    };
+    ctx.window=ctx; vm.runInNewContext(source("tracking"),ctx);
+    return {elements,calls,updates,ctx,setData(value){data=value;},tick:()=>tick(),hides:()=>hides};
+}
+test("administrador acompanha GPS do entregador sem publicar localização e encerra ao entregar", async () => {
+    const h=adminTrackingHarness(); await settle();
+    assert.match(h.elements.trackingStatus.textContent,/Aguardando o entregador/);
+    assert.equal(h.updates.length,0);
+    assert.equal(h.elements.trackingBack.href,"/admin/pages/vendas/vendas.html?pedido=example");
+    h.setData({...routeData(),status:"SAIU_PARA_ENTREGA",atualizado_em:new Date().toISOString()});
+    await h.tick(); assert.equal(h.updates.at(-1).latitude,-23.66);
+    h.setData({...routeData(),latitude:-23.65,status:"SAIU_PARA_ENTREGA",atualizado_em:new Date().toISOString()});
+    await h.tick(); assert.equal(h.updates.at(-1).latitude,-23.65);
+    h.ctx.document.hidden=true; await h.tick(); assert.equal(h.calls.length,3,"Pausa atualizações enquanto a página está oculta");
+    h.ctx.document.hidden=false;
+    h.setData({status:"ENTREGUE"});await h.tick();
+    assert.match(h.elements.trackingStatus.textContent,/Rastreamento encerrado/);
+    assert.equal(h.hides(),2);
+    await h.tick();assert.equal(h.calls.length,4,"Para consultas após concluir a entrega");
+    for (const call of h.calls) {
+        assert.equal(call.url,"/api/vendas/example/rastreamento");
+        assert.equal(call.options.method || "GET","GET");
+        assert.equal(call.options.headers.Authorization,"Bearer admin-session");
+    }
+});
+test("sessão de cliente não permite abrir acompanhamento administrativo", async () => {
+    const h=adminTrackingHarness(null);await settle();
+    assert.equal(h.calls.length,0);
+    assert.equal(h.elements.trackingLogin.hidden,false);
+    assert.equal(h.elements.trackingLogin.href,"/admin/index.html");
+    assert.match(h.elements.trackingStatus.textContent,/Entre no painel administrativo/);
+});
 function mapHarness() {
     const elements=Object.fromEntries(["deliveryMap","mapStatus","originAddress","destinationAddress"].map(id=>[id,element()]));
     const paths=[], centers=[], vehicles=[], circles=[]; let ready;

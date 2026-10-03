@@ -2,17 +2,22 @@
 document.addEventListener("DOMContentLoaded", () => {
     const admin = location.pathname.startsWith("/admin/"), tokenKey = admin ? "token" : "petflow_customer_token";
     const endpoint = admin ? "/api/dashboard/notificacoes" : "/api/public/clientes/notificacoes";
-    let original = document.querySelector(admin ? "#notificationButton" : ".customer-notification-button");
-    const host = document.createElement("div"); host.className = "pf-notifications";
-    if (admin && original) original.closest(".notification-menu").replaceWith(host);
+    const original = document.querySelector(admin ? "#notificationButton" : ".customer-notification-button");
+    if (admin && !original) return;
+    const host = admin ? original.closest(".notification-menu") : document.createElement("div");
+    host.classList.add("pf-notifications");
+    if (admin) host.querySelector("#notificationPanel")?.remove();
     else if (original) { original.before(host); host.appendChild(original); }
     else { host.classList.add("pf-notifications-floating"); document.body.appendChild(host); }
-    const button = !admin && original ? original : document.createElement("button");
+    const button = original || document.createElement("button");
     if (!host.contains(button)) host.appendChild(button);
-    button.type = "button"; button.classList.add("pf-notifications-button");
-    if (admin || !original) button.textContent = "Notificações";
+    button.type = "button";
+    if (!admin) button.classList.add("pf-notifications-button");
+    if (!original) button.textContent = "Notificações";
     button.setAttribute("aria-label", "Abrir notificações"); button.setAttribute("aria-expanded", "false"); button.setAttribute("aria-controls", "pfNotificationsPanel");
-    const badge = document.createElement("span"); badge.className = "pf-notifications-badge"; badge.hidden = true; button.appendChild(badge);
+    const badge = admin ? button.querySelector("#notificationCount") : document.createElement("span");
+    badge.classList.add("pf-notifications-badge"); badge.hidden = true;
+    if (!button.contains(badge)) button.appendChild(badge);
     const panel = document.createElement("section"); panel.id = "pfNotificationsPanel"; panel.className = "pf-notifications-panel"; panel.hidden = true; panel.setAttribute("aria-label", "Notificações");
     panel.innerHTML = '<header><strong>Notificações</strong><button type="button" data-close aria-label="Fechar notificações">×</button></header><p role="status"></p><button type="button" data-read>Marcar exibidas como lidas</button><div class="pf-notifications-list"></div>';
     host.appendChild(panel);

@@ -22,7 +22,8 @@ Referências oficiais: [carregar Maps JavaScript API](https://developers.google.
 3. Na seção **GPS da entrega**, gere o link. Use **Compartilhar com entregador** ou **Copiar link**. O link é privado do entregador, vale 12 horas e dá acesso apenas a essa entrega. Gerar outro revoga o anterior e limpa a posição/rota anterior.
 4. O entregador abre o link no próprio celular e toca **Iniciar viagem**, permitindo GPS. O mapa mostra um carrinho na última posição recebida e a rota pelas ruas **da posição GPS do entregador até o endereço salvo na compra**. O acompanhamento fica dentro da PetFlow, sem botão para abrir a rota no aplicativo Google Maps. O destino não muda se o cliente editar o perfil depois. Para calcular o **frete**, a origem continua sendo **Avenida Novo Horizonte, 123, Vila Sacadura Cabral, Santo André, SP, Brasil**, configurável por `DELIVERY_ORIGIN_ADDRESS`.
 5. O cliente entra na conta usada na compra e abre **Rastrear pedido** pelo e-mail, pelas notificações ou por **Meus pedidos**. O login iniciado pelo rastreamento retorna à mesma entrega.
-6. O administrador marca **Entregue** ao concluir. O servidor revoga o link e remove a posição e a rota. O entregador também pode encerrar antes pelo botão **Parar e encerrar compartilhamento**.
+6. Para acompanhar no painel, o administrador ou gerente abre o pedido em **Saiu para entrega** e clica em **Acompanhar entrega**, na seção **GPS da entrega**. A página mostra a mesma posição e rota compartilhadas com o cliente, sem solicitar nem transmitir o GPS do administrador. Não é preciso gerar outro link. Antes do entregador compartilhar sua posição, aparece um aviso de espera. O acompanhamento exige uma sessão administrativa da mesma loja.
+7. O administrador marca **Entregue** ao concluir. O servidor revoga o link e remove a posição e a rota; o mapa de acompanhamento é ocultado. O entregador também pode encerrar antes pelo botão **Parar e encerrar compartilhamento**.
 
 GPS e notificações são consultados a cada 15 segundos em páginas visíveis. O carrinho muda de posição conforme as coordenadas recebidas; não simula deslocamento pela linha da rota. A rota é refeita a partir da última posição do entregador a cada 5 minutos durante a viagem; ele também pode pedir **Atualizar rota** (no máximo uma consulta por minuto). Ambos veem a mesma rota. É uma referência, sem navegação guiada por voz ou promessa de horário de chegada.
 
@@ -34,7 +35,7 @@ Sem a chave do navegador, o mapa interno apresenta aviso de configuração; a tr
 
 Novas contas geram aviso persistente no painel. Novos pedidos mantêm seus avisos administrativos. Todas as mudanças efetivas de status geram avisos para o cliente, na mesma transação do pedido, inclusive alterações pelo pagamento. Repetir o mesmo status não duplica avisos.
 
-O sino aparece nas páginas administrativas e nas páginas públicas com sessão iniciada. Mostra até 100 avisos recentes. **Marcar exibidas como lidas** grava somente os avisos apresentados; a leitura administrativa é individual. Não são notificações push fora do site. O histórico começa após instalar a migração, sem enviar avisos retroativos de cadastros antigos.
+No painel administrativo, as notificações ficam no sino existente do cabeçalho, sem botão extra ou flutuante. Nas páginas públicas, ficam disponíveis com sessão iniciada. Mostra até 100 avisos recentes. **Marcar exibidas como lidas** grava somente os avisos apresentados; a leitura administrativa é individual. Não são notificações push fora do site. O histórico começa após instalar a migração, sem enviar avisos retroativos de cadastros antigos.
 
 ## Verificação
 

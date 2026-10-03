@@ -72,6 +72,16 @@ async function acompanhar(req, res, next) {
         res.set("Cache-Control", "no-store").json({ success: true, data: rows[0] });
     } catch (e) { next(e); }
 }
+async function acompanharAdmin(req, res, next) {
+    try {
+        if (!uuid(req.params.id)) throw fail("Pedido inválido.", 400);
+        const { rows } = await db.query(`SELECT v.status,v.endereco_entrega,r.latitude,r.longitude,r.precisao_m,r.atualizado_em,r.rota FROM vendas v
+            LEFT JOIN entrega_rastreamento r ON r.venda_id=v.id AND r.expira_em>NOW() AND v.status='SAIU_PARA_ENTREGA'
+            WHERE v.id=$1 AND v.empresa_id=$2`, [req.params.id,req.user.empresaId]);
+        if (!rows[0]) throw fail("Pedido não encontrado.", 404);
+        res.set("Cache-Control", "no-store").json({ success: true, data: rows[0] });
+    } catch (e) { next(e); }
+}
 function driverHash(req) {
     const token = /^Bearer ([a-f0-9]{64})$/.exec(req.get("authorization") || "")?.[1];
     if (!token) throw fail("Link de entrega inválido.", 401);
@@ -119,4 +129,4 @@ function mapaConfig(req, res) {
     // Chave pública restrita por domínio. Nunca publicar a chave de Routes usada pelo servidor.
     res.set("Cache-Control", "no-store").json({ success: true, data: { browserKey: process.env.GOOGLE_MAPS_BROWSER_API_KEY?.trim() || "" } });
 }
-module.exports = { cotar, consultarCep, criarLink, localizacao, acompanhar, viagem, rota, mapaConfig };
+module.exports = { cotar, consultarCep, criarLink, localizacao, acompanhar, acompanharAdmin, viagem, rota, mapaConfig };

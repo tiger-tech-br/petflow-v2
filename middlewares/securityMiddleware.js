@@ -17,7 +17,8 @@ const cookieParser = require("cookie-parser");
 const morgan = require("morgan");
 
 const rateLimit = require("express-rate-limit");
-const realtimePath = /^\/api\/(?:dashboard(?:\/notificacoes)?|public\/(?:clientes\/notificacoes|pedidos\/[^/]+\/rastreamento|entregas\/(?:localizacao|viagem|rota|mapa-config)))$/;
+const realtimePath = /^\/api\/(?:dashboard(?:\/notificacoes)?|vendas\/[^/]+\/rastreamento|public\/(?:clientes\/notificacoes|pedidos\/[^/]+\/rastreamento|entregas\/(?:localizacao|viagem|rota|mapa-config)))$/;
+const mapPages = ["/entregador", "/acompanhar-entrega", "/admin/acompanhar-entrega"];
 const realtimeLimiter = rateLimit({ windowMs: 60000, limit: 120, standardHeaders: true, legacyHeaders: false,
     message: { success: false, message: "Muitas atualizações. Aguarde um minuto para tentar novamente." } });
 
@@ -110,8 +111,8 @@ function securityMiddleware(app) {
                 "script-src": [
                     "'self'",
                     "'unsafe-inline'",
-                    req => ["/entregador", "/acompanhar-entrega"].includes(req.path) ? "'unsafe-eval'" : "'self'",
-                    req => ["/entregador", "/acompanhar-entrega"].includes(req.path) ? "blob:" : "'self'",
+                    req => mapPages.includes(req.path) ? "'unsafe-eval'" : "'self'",
+                    req => mapPages.includes(req.path) ? "blob:" : "'self'",
                     "https://maps.googleapis.com",
                     "https://maps.gstatic.com",
                     "https://cdnjs.cloudflare.com"
@@ -145,7 +146,7 @@ function securityMiddleware(app) {
     }));
 
     app.use((req, res, next) => {
-        if (["/entregador", "/acompanhar-entrega"].includes(req.path)) {
+        if (mapPages.includes(req.path)) {
             // Google valida a origem da chave pública; não transmite caminho nem fragmento privado.
             res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
         }

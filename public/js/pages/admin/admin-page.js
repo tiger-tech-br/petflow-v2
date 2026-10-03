@@ -1023,6 +1023,7 @@
 
                 ${currentStatus === "SAIU_PARA_ENTREGA" ? `<div class="form-group">
                     <label>GPS da entrega</label>
+                    <a class="btn btn-primary" href="/admin/acompanhar-entrega?pedido=${encodeURIComponent(sale.id)}">Acompanhar entrega</a>
                     <button class="btn" type="button" id="createDriverLink">Gerar link para o entregador</button>
                     <p>O link vale por 12 horas. Gerar outro invalida o anterior. Envie apenas ao entregador deste pedido.</p>
                     <input class="form-control" id="driverLink" aria-label="Link do entregador" readonly hidden>

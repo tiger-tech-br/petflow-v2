@@ -46,6 +46,7 @@ router.get(
     VendaController.listar
 );
 router.post("/:id/rastreamento", require("../controllers/entregaController").criarLink);
+router.get("/:id/rastreamento", require("../controllers/entregaController").acompanharAdmin);
 
 /* ==================================================
    ESTATÍSTICAS DOS PEDIDOS

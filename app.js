@@ -163,6 +163,10 @@ app.get("/entregador", (request, response) => {
 app.get("/acompanhar-entrega", (request, response) => {
     response.sendFile(path.join(__dirname, "views", "delivery", "tracking.html"));
 });
+app.get("/admin/acompanhar-entrega", (request, response) => {
+    response.set("Cache-Control", "no-store");
+    response.sendFile(path.join(__dirname, "views", "delivery", "tracking.html"));
+});
 
 app.get("/politica-de-privacidade", (request, response) => {
 
