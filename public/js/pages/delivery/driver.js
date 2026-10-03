@@ -51,7 +51,7 @@
             trip = { ...trip, ...coords, precisao_m: coords.precisao, atualizado_em: new Date().toISOString() };
             status.textContent = `Viagem em andamento. GPS enviado às ${new Date().toLocaleTimeString("pt-BR")}. Precisão aproximada: ${Math.round(coords.precisao)} m.`;
             map.update(trip);
-            if (Date.now() - lastRouteAttempt > (trip.rota ? 300000 : 60000)) getRoute();
+            if (Date.now() - lastRouteAttempt > (trip.rota?.tipoOrigem === "GPS_ENTREGADOR" ? 300000 : 60000)) getRoute();
         } catch (error) {
             if (current !== generation) return;
             status.textContent = error.code === 1 ? "Acesso ao GPS negado. Permita a localização nas configurações do navegador e tente iniciar novamente." : `GPS sem atualização: ${error.message || "não foi possível obter a posição"}.`;

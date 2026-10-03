@@ -20,15 +20,15 @@ Referências oficiais: [carregar Maps JavaScript API](https://developers.google.
 1. Em **Administração → Pedidos**, abra o pedido pago. Atualize para **Preparando** e depois **Saiu para entrega**.
 2. O cliente recebe uma notificação salva e o e-mail com **Rastrear pedido**. O e-mail depende do Resend configurado. A notificação no site independe do sucesso do e-mail.
 3. Na seção **GPS da entrega**, gere o link. Use **Compartilhar com entregador** ou **Copiar link**. O link é privado do entregador, vale 12 horas e dá acesso apenas a essa entrega. Gerar outro revoga o anterior e limpa a posição/rota anterior.
-4. O entregador abre o link no próprio celular e toca **Iniciar viagem**, permitindo GPS. O mapa mostra a posição e a rota pelas ruas até o endereço salvo na compra. Esse endereço não muda se o cliente editar o perfil depois.
+4. O entregador abre o link no próprio celular e toca **Iniciar viagem**, permitindo GPS. O mapa mostra um carrinho na última posição recebida e a rota pelas ruas **da posição GPS do entregador até o endereço salvo na compra**. O acompanhamento fica dentro da PetFlow, sem botão para abrir a rota no aplicativo Google Maps. O destino não muda se o cliente editar o perfil depois. Para calcular o **frete**, a origem continua sendo **Avenida Novo Horizonte, 123, Vila Sacadura Cabral, Santo André, SP, Brasil**, configurável por `DELIVERY_ORIGIN_ADDRESS`.
 5. O cliente entra na conta usada na compra e abre **Rastrear pedido** pelo e-mail, pelas notificações ou por **Meus pedidos**. O login iniciado pelo rastreamento retorna à mesma entrega.
 6. O administrador marca **Entregue** ao concluir. O servidor revoga o link e remove a posição e a rota. O entregador também pode encerrar antes pelo botão **Parar e encerrar compartilhamento**.
 
-GPS e notificações são consultados a cada 15 segundos em páginas visíveis. A rota é refeita a cada 5 minutos durante a viagem; o entregador também pode pedir **Atualizar rota** (no máximo uma consulta por minuto). Ambos veem a mesma rota. É uma referência, sem navegação guiada por voz ou promessa de horário de chegada.
+GPS e notificações são consultados a cada 15 segundos em páginas visíveis. O carrinho muda de posição conforme as coordenadas recebidas; não simula deslocamento pela linha da rota. A rota é refeita a partir da última posição do entregador a cada 5 minutos durante a viagem; ele também pode pedir **Atualizar rota** (no máximo uma consulta por minuto). Ambos veem a mesma rota. É uma referência, sem navegação guiada por voz ou promessa de horário de chegada.
 
-O entregador precisa manter a página aberta, GPS permitido e conexão ativa. Há tentativa de manter a tela acesa quando o navegador oferece essa função. Tela bloqueada/segundo plano pode interromper a posição; o cliente recebe aviso de posição antiga após 2 minutos. Abrir o aplicativo Google Maps também pode pausar o navegador. Rastreamento contínuo em segundo plano exige aplicativo móvel com as permissões apropriadas.
+O entregador precisa manter a página aberta, GPS permitido e conexão ativa. Há tentativa de manter a tela acesa quando o navegador oferece essa função. Tela bloqueada/segundo plano pode interromper a posição; o cliente recebe aviso de posição antiga após 2 minutos. Rastreamento contínuo em segundo plano exige aplicativo móvel com as permissões apropriadas.
 
-Sem a chave do navegador, o mapa interno apresenta aviso de configuração; a transmissão de coordenadas continua funcionando e há um link para abrir a rota no Google Maps. Falha ao consultar a rota não interrompe o GPS. Pedidos antigos sem endereço de entrega salvo não têm rota automática confiável.
+Sem a chave do navegador, o mapa interno apresenta aviso de configuração; a transmissão de coordenadas continua funcionando. Falha ao consultar a rota não interrompe o GPS. Pedidos antigos sem endereço de entrega salvo não têm rota automática confiável.
 
 ## Notificações
 

@@ -2,7 +2,7 @@
 const { test } = require("node:test"), assert = require("node:assert/strict"), vm = require("node:vm"), fs = require("node:fs");
 const source = file => fs.readFileSync(`public/js/pages/delivery/${file}.js`,"utf8");
 const settle = async () => { for (let i=0;i<15;i++) await new Promise(resolve => setImmediate(resolve)); };
-function element() { return { hidden: false, disabled: false, textContent: "", events: {}, addEventListener(name,fn) { this.events[name]=fn; } }; }
+function element() { return { hidden: false, disabled: false, textContent: "", events: {}, addEventListener(name,fn) { this.events[name]=fn; }, removeAttribute(name) { delete this[name]; } }; }
 function driverHarness() {
     const elements = Object.fromEntries(["startGps","stopGps","refreshRoute","gpsStatus","routeStatus"].map(id => [id,element()]));
     const calls = [], updates = [], gps = [], intervals = new Set();
@@ -42,7 +42,7 @@ test("encerrar enquanto aguarda GPS impede envio tardio da posição", async () 
     const h = driverHarness(); await h.elements.startGps.events.click();
     await h.elements.stopGps.events.click();
     h.gps[0].resolve({coords:{latitude:-23.66,longitude:-46.55,accuracy:10}}); await settle();
-    assert.equal(h.calls.filter(c=>c.options.method === "POST").length,0);
+    assert.equal(h.calls.filter(c=>c.url.endsWith("/localizacao") && c.options.method === "POST").length,0);
 });
 test("permissão negada permite tentar novamente e link expirado não solicita GPS", async () => {
     const h = driverHarness(); await h.elements.startGps.events.click();
@@ -63,15 +63,47 @@ test("cliente exibe última posição com alerta de atraso e remove mapa ao conc
     assert.equal(updates.at(-1).rota.polyline,"route");assert.match(elements.trackingStatus.textContent,/Sem atualização recente/);
     data={status:"ENTREGUE"};await tick();assert.match(elements.trackingStatus.textContent,/Pedido entregue/);assert.equal(hides,1);
 });
-test("mapa Google mantém posição e rota e não ressuscita após encerrar carregamento pendente", async () => {
-    const elements=Object.fromEntries(["deliveryMap","mapStatus","mapsLink","destinationAddress"].map(id=>[id,element()]));
-    const paths=[], centers=[]; let ready;
-    const ctx={URLSearchParams,console,setTimeout,clearTimeout,document:{getElementById:id=>elements[id],createElement:()=>({}),head:{appendChild(){ready=()=>ctx.petflowMapsReady();}}},fetch:async()=>({ok:true,json:async()=>({data:{browserKey:"public-key"}})}),google:{maps:{Map:class{fitBounds(){}getZoom(){return 15;}addListener(){}},Circle:class{setCenter(p){centers.push(p);}setRadius(){}},Polyline:class{setPath(p){paths.push(p);}},LatLngBounds:class{extend(){}},geometry:{encoding:{decodePath:()=>[{lat:-23,lng:-46}]}}}}};
+function mapHarness() {
+    const elements=Object.fromEntries(["deliveryMap","mapStatus","originAddress","destinationAddress"].map(id=>[id,element()]));
+    const paths=[], centers=[], vehicles=[], circles=[]; let ready;
+    const domElement = () => ({ ...element(), style: {}, children: [], setAttribute() {}, appendChild(child) { this.children.push(child); }, remove() {} });
+    const ctx={URLSearchParams,console,setTimeout,clearTimeout,document:{getElementById:id=>elements[id],createElement:domElement,head:{appendChild(){ready=()=>ctx.petflowMapsReady();}}},fetch:async()=>({ok:true,json:async()=>({data:{browserKey:"public-key"}})}),google:{maps:{
+        Map:class{fitBounds(){}getZoom(){return 15;}addListener(){}},
+        Circle:class{constructor(){circles.push(this);}setCenter(p){this.center=p;centers.push(p);}setRadius(){}setVisible(v){this.visible=v;}},
+        OverlayView:class{setMap(){vehicles.push(this);this.onAdd();}getPanes(){return{overlayMouseTarget:{appendChild(){}}};}getProjection(){return{fromLatLngToDivPixel:p=>({x:p.lng*100,y:p.lat*100})};}},
+        LatLng:class{constructor(p){Object.assign(this,p);}},
+        Polyline:class{setPath(p){paths.push(p);}},LatLngBounds:class{extend(){}},geometry:{encoding:{decodePath:()=>[{lat:-23,lng:-46}]}}
+    }}};
     ctx.window=ctx;vm.runInNewContext(source("map"),ctx);
-    const map=ctx.PetFlowDeliveryMap();
-    const data={latitude:-23.66,longitude:-46.55,precisao_m:10,endereco_entrega:{endereco:"Rua",numero:"123"},rota:{polyline:"route",destino:{latitude:-23.67,longitude:-46.56}}};
-    const pending=map.update(data);await settle();map.hide();ready();await pending;
-    assert.equal(elements.deliveryMap.hidden,true);
-    await map.update(data);assert.equal(elements.deliveryMap.hidden,false);assert.equal(paths.length,1);assert.equal(centers.at(-1).lat,-23.67);
-    await map.update({...data,latitude:-23.65});assert.equal(paths.length,1,"Não recria rota nem reinicia zoom a cada GPS");assert.equal(centers.at(-1).lat,-23.65);
+    return { elements,paths,centers,vehicles,circles,map:ctx.PetFlowDeliveryMap(),ready:()=>ready() };
+}
+const routeData = () => ({latitude:-23.66,longitude:-46.55,precisao_m:10,endereco_entrega:{endereco:"Rua",numero:"123"},rota:{tipoOrigem:"GPS_ENTREGADOR",polyline:"route",origem:{latitude:-23.66,longitude:-46.55},destino:{latitude:-23.67,longitude:-46.56}}});
+test("mapa Google mantém posição e rota e não ressuscita após encerrar carregamento pendente", async () => {
+    const h=mapHarness(),data=routeData();
+    const pending=h.map.update(data);await settle();h.map.hide();h.ready();await pending;
+    assert.equal(h.elements.deliveryMap.hidden,true);
+    await h.map.update(data);assert.equal(h.elements.deliveryMap.hidden,false);assert.equal(h.paths.length,1);assert.equal(h.centers.at(-1).lat,-23.67);
+    assert.equal(h.vehicles[0].element.children[0].src,"/images/icons/delivery-car.svg");
+    assert.equal(h.vehicles[0].element.hidden,false);
+    const previous=h.vehicles[0].element.style.top;
+    await h.map.update({...data,latitude:-23.65});assert.equal(h.paths.length,1,"Não recria rota nem reinicia zoom a cada GPS");
+    assert.notEqual(h.vehicles[0].element.style.top,previous,"O carrinho segue o GPS recebido");
+    assert.equal(h.circles[1].center.lat,-23.67,"O destino continua sendo o endereço do cliente");
+});
+test("sem GPS aguarda o entregador e não inventa posição do veículo na loja", async () => {
+    const h=mapHarness(),data={...routeData(),latitude:null,longitude:null};
+    await h.map.update(data);
+    assert.equal(h.elements.deliveryMap.hidden,true);
+    assert.equal(h.paths.length,0); assert.equal(h.vehicles.length,0);
+    assert.match(h.elements.originAddress.textContent,/Aguardando/);
+    const pending=h.map.update(routeData());await settle();h.ready();await pending;
+    assert.equal(h.vehicles[0].element.hidden,false);
+});
+test("mapa descarta rota antiga que estava fixada na loja", async () => {
+    const h=mapHarness(),data=routeData();
+    const pending=h.map.update({...data,rota:{...data.rota,tipoOrigem:"LOJA"}});await settle();h.ready();await pending;
+    assert.equal(h.paths.at(-1).length,0,"Não desenha a rota de outra origem");
+    assert.equal(h.circles[1].visible,false);
+    assert.equal(h.vehicles[0].element.hidden,false,"GPS continua visível");
+    await h.map.update(data);assert.equal(h.paths.at(-1).length,1);
 });

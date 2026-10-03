@@ -29,6 +29,7 @@ test("cadastro, confirmação, compra, webhook e estoque em PostgreSQL isolado",
         process.env.APP_URL = "http://localhost";
         process.env.NODE_ENV = "test";
         process.env.GOOGLE_MAPS_API_KEY = "test-maps-key";
+        delete process.env.DELIVERY_ORIGIN_ADDRESS;
         process.env.GOOGLE_MAPS_BROWSER_API_KEY = "test-public-browser-key";
         let routeCalls = 0;
         global.fetch = async (url, options) => {
@@ -36,10 +37,11 @@ test("cadastro, confirmação, compra, webhook e estoque em PostgreSQL isolado",
             if (options.headers["X-Goog-FieldMask"].includes("polyline")) {
                 routeCalls++;
                 const body = JSON.parse(options.body);
-                assert.equal(body.origin.location.latLng.latitude, -23.66);
+                assert.equal(body.origin.location.latLng.latitude, -23.66, "Rota parte da posição GPS do entregador");
+                assert.equal(body.origin.address, undefined, "Frete usa loja; navegação usa GPS");
                 assert.match(body.destination.address, /Rua de Teste/, "Rota usa endereço congelado do pedido, não perfil editado");
             }
-            return { ok: true, json: async () => ({ routes: [{ distanceMeters: 2500, duration: "500s", polyline: { encodedPolyline: "test-route" }, legs: [{ endLocation: { latLng: { latitude: -23.67, longitude: -46.56 } } }] }] }) };
+            return { ok: true, json: async () => ({ routes: [{ distanceMeters: 2500, duration: "500s", polyline: { encodedPolyline: "test-route" }, legs: [{ startLocation: { latLng: { latitude: -23.66, longitude: -46.55 } }, endLocation: { latLng: { latitude: -23.67, longitude: -46.56 } } }] }] }) };
         };
         require.cache[require.resolve("../config/db")] = { exports: { pool } };
         const email = require("../services/emailService");
@@ -198,12 +200,16 @@ test("cadastro, confirmação, compra, webhook e estoque em PostgreSQL isolado",
         assert.equal(trip.body.data.token_hash, undefined);
         const config = await request("/api/public/entregas/mapa-config");
         assert.deepEqual(config.body.data, { browserKey: "test-public-browser-key" }, "Não expõe chave privada de Routes");
-        assert.equal((await request("/api/public/entregas/rota", "POST", {}, driverToken)).status, 409, "Exige GPS antes de calcular rota");
+        assert.equal((await request("/api/public/entregas/rota", "POST", {}, driverToken)).status, 409, "Navegação exige posição real do entregador");
+        const previewTracking = (await request(`/api/public/pedidos/${order}/rastreamento`, "GET", null, token)).body.data;
+        assert.equal(previewTracking.latitude, null, "Não simula posição do entregador na loja");
+        assert.equal(previewTracking.rota, null);
         assert.equal((await request(gps, "POST", position)).status, 401);
         assert.equal((await request(gps, "POST", { ...position, latitude: 91 }, driverToken)).status, 400);
         assert.equal((await request(gps, "POST", position, driverToken)).status, 200);
         assert.equal((await request("/api/public/entregas/rota", "POST", {}, driverToken)).status, 200);
         assert.equal((await request("/api/public/entregas/rota", "POST", {}, driverToken)).status, 200);
+        assert.equal((await request(`/api/public/pedidos/${order}/rastreamento`, "GET", null, token)).body.data.rota.tipoOrigem, "GPS_ENTREGADOR");
         assert.equal(routeCalls, 1, "Consultas repetidas reaproveitam rota e limitam custo");
         const tracking = `/api/public/pedidos/${order}/rastreamento`;
         assert.equal((await request(tracking)).status, 401);

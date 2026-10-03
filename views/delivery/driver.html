@@ -1,13 +1,11 @@
 <!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta name="referrer" content="strict-origin-when-cross-origin"><title>PetFlow | Viagem do entregador</title><link rel="stylesheet" href="/css/pages/delivery.css"></head>
 <body><main class="delivery-card"><span class="eyebrow">PetFlow · Entrega</span><h1>Viagem do entregador</h1>
-<p>Inicie a viagem para ver sua posição e a rota até o cliente. Seu GPS será compartilhado com ele a cada 15 segundos.</p>
+<p>Inicie a viagem para ver a rota da sua posição atual até o cliente e sua localização indicada por um carrinho. Seu GPS será compartilhado com ele a cada 15 segundos.</p>
 <p>Permita a localização e mantenha esta página aberta e a tela ativa. O celular pode suspender o GPS em segundo plano. Ao encerrar a entrega no painel, a loja também encerra o rastreamento.</p>
 <button id="startGps" type="button">Iniciar viagem</button><button id="stopGps" type="button" disabled>Parar e encerrar compartilhamento</button>
 <p id="gpsStatus" role="status">Pronto para iniciar. O link é exclusivo para esta entrega.</p>
-<p id="destinationAddress"></p><div id="deliveryMap" aria-label="Mapa do entregador e rota até o cliente" hidden></div><p id="mapStatus" role="status"></p>
-<a id="mapsLink" target="_blank" rel="noopener noreferrer" hidden>Abrir rota no aplicativo Google Maps</a>
-<p><small>Ao trocar de aplicativo, o navegador pode pausar o compartilhamento. Volte a esta página para manter o cliente atualizado.</small></p>
+<p id="originAddress"></p><p id="destinationAddress"></p><div id="deliveryMap" aria-label="Mapa e rota da posição GPS do entregador até o cliente" hidden></div><p id="mapStatus" role="status"></p>
 <button id="refreshRoute" type="button" hidden disabled>Atualizar rota</button><p id="routeStatus" role="status"></p>
 <footer><a href="/politica-de-privacidade">Privacidade</a> · <a href="/termos-de-uso">Termos de uso</a></footer>
 </main><script src="/js/pages/delivery/map.js"></script><script src="/js/pages/delivery/driver.js"></script></body></html>

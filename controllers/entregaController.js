@@ -100,14 +100,14 @@ async function rota(req, res, next) {
             if (row.latitude === null || !row.atualizado_em || Date.now()-new Date(row.atualizado_em).getTime()>120000)
                 throw fail("Compartilhe uma posição GPS recente antes de calcular a rota.", 409);
             if (row.recente) {
-                if (row.rota) return { cached: row.rota };
+                if (row.rota?.tipoOrigem === "GPS_ENTREGADOR") return { cached: row.rota };
                 throw fail("Aguarde um minuto para tentar a rota novamente.", 429);
             }
             const reservation = await client.query("UPDATE entrega_rastreamento SET rota_solicitada_em=date_trunc('milliseconds',NOW()) WHERE venda_id=$1 RETURNING rota_solicitada_em", [row.id]);
             return { ...row, reservation: reservation.rows[0].rota_solicitada_em };
         });
         if (trip.cached) return res.set("Cache-Control", "no-store").json({ success: true, data: trip.cached });
-        const route = await require("../services/entregaRotaService").calcularRota(trip, trip.endereco_entrega);
+        const route = await require("../services/entregaRotaService").calcularRota(trip,trip.endereco_entrega);
         const saved = await db.query(`UPDATE entrega_rastreamento SET rota=$1 WHERE venda_id=$2 AND token_hash=$3
             AND expira_em>NOW() AND rota_solicitada_em=$4
             AND EXISTS (SELECT 1 FROM vendas WHERE id=$2 AND status='SAIU_PARA_ENTREGA')`, [route,trip.id,tokenHash,trip.reservation]);
