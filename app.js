@@ -48,6 +48,9 @@ const compraRoutes = require("./routes/compraRoutes");
 const itemCompraRoutes = require("./routes/itemCompraRoutes");
 
 const financeiroRoutes = require("./routes/financeiroRoutes");
+const cupomAdminRoutes = require("./routes/cupomAdminRoutes");
+const usuarioAdminRoutes = require("./routes/usuarioAdminRoutes");
+const auditoriaRoutes = require("./routes/auditoriaRoutes");
 
 const publicCatalogRoutes = require("./routes/publicCatalogRoutes");
 
@@ -246,6 +249,9 @@ app.use("/api/compras", compraRoutes);
 app.use("/api/itens-compra", itemCompraRoutes);
 
 app.use("/api/financeiro", financeiroRoutes);
+app.use("/api/cupons", cupomAdminRoutes);
+app.use("/api/usuarios-admin", usuarioAdminRoutes);
+app.use("/api/auditoria", auditoriaRoutes);
 
 /* ==========================
    DASHBOARD

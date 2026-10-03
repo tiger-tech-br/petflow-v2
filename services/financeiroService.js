@@ -192,6 +192,10 @@ class FinanceiroService {
 
     }
 
+    static async cancelarPorReferencia(empresaId, origem, referenciaId, client) {
+        return FinanceiroModel.cancelarPorReferencia(empresaId, origem, referenciaId, client);
+    }
+
 }
 
 module.exports = FinanceiroService;

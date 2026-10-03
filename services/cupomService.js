@@ -27,12 +27,24 @@ function calcularDesconto(cupom, subtotalCentavos, now = new Date()) {
     return discount;
 }
 
-async function validar(client, empresaId, codigo, subtotalCentavos, lock = false) {
+async function validar(client, empresaId, codigo, subtotalCentavos, lock = false, clienteId = null) {
     const { rows } = await client.query(
         `SELECT * FROM cupons WHERE empresa_id=$1 AND codigo=$2 ${lock ? "FOR SHARE" : ""}`,
         [empresaId, normalizarCodigo(codigo)]
     );
     const cupom = rows[0];
+    if (cupom && (cupom.limite_usos || (clienteId && cupom.limite_por_cliente))) {
+        const { rows: [usage] } = await client.query(
+            `SELECT COUNT(*)::int AS total,
+             COUNT(*) FILTER (WHERE cliente_id=$3)::int AS cliente
+             FROM vendas WHERE empresa_id=$1 AND cupom_codigo=$2 AND status <> 'CANCELADA'`,
+            [empresaId, cupom.codigo, clienteId]
+        );
+        if (cupom.limite_usos && usage.total >= cupom.limite_usos) throw fail("Este cupom atingiu o limite de utilizações.");
+        if (clienteId && cupom.limite_por_cliente && usage.cliente >= cupom.limite_por_cliente) {
+            throw fail("Você já utilizou este cupom o número máximo de vezes.");
+        }
+    }
     const desconto = calcularDesconto(cupom, subtotalCentavos) / 100;
     return { codigo: cupom.codigo, descricao: cupom.descricao, desconto };
 }

@@ -129,7 +129,7 @@ function securityMiddleware(app) {
                     "https://cdnjs.cloudflare.com",
                     "data:"
                 ],
-                "img-src": ["'self'", "data:", "https:"],
+                "img-src": ["'self'", "data:", "blob:", "https:"],
                 "worker-src": ["'self'", "blob:"],
                 "connect-src": [
                     "'self'",

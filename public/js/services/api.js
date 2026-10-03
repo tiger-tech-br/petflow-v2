@@ -16,12 +16,17 @@ const API = {
 async function request(endpoint, options = {}) {
 
     const token = getToken();
+    const formDataBody = typeof FormData !== "undefined" && options.body instanceof FormData;
 
     const config = {
 
         headers: {
 
-            "Content-Type": "application/json",
+            ...(!formDataBody && {
+
+                "Content-Type": "application/json"
+
+            }),
 
             ...(token && {
 
@@ -106,7 +111,9 @@ async function apiPost(endpoint, data) {
 
         method: "POST",
 
-        body: JSON.stringify(data)
+        body: typeof FormData !== "undefined" && data instanceof FormData
+            ? data
+            : JSON.stringify(data)
 
     });
 
@@ -122,7 +129,9 @@ async function apiPut(endpoint, data) {
 
         method: "PUT",
 
-        body: JSON.stringify(data)
+        body: typeof FormData !== "undefined" && data instanceof FormData
+            ? data
+            : JSON.stringify(data)
 
     });
 

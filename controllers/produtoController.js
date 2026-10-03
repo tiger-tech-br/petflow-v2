@@ -90,6 +90,18 @@ async function store(request, response, next) {
 
     try {
 
+        if (!request.file?.path) {
+
+            return response.status(400).json({
+
+                success: false,
+
+                message: "A foto do produto é obrigatória. Envie uma imagem JPG, PNG ou WebP."
+
+            });
+
+        }
+
         const produto = await produtoModel.create({
 
             ...request.body,
@@ -128,6 +140,26 @@ async function update(request, response, next) {
 
         const { id } = request.params;
 
+        const existente = await produtoModel.findById(
+
+            id,
+
+            request.user.empresaId
+
+        );
+
+        if (!existente) {
+
+            return response.status(404).json({
+
+                success: false,
+
+                message: "Produto não encontrado."
+
+            });
+
+        }
+
         const produto = await produtoModel.update(
 
             id,
@@ -136,7 +168,7 @@ async function update(request, response, next) {
 
                 ...request.body,
 
-                foto: request.file?.path || request.body.foto
+                foto: request.file?.path || existente.foto
 
             },
 

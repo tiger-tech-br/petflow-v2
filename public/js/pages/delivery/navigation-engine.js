@@ -43,7 +43,7 @@
                 steps.push(step);total+=meters;
             }
         } catch { return null; }
-        let progress=0,initialized=false,lastFix,lastTime,offRouteFixes=0;
+        let progress=0,initialized=false,lastFix,lastTime,lastPosition,offRouteFixes=0;
         return {
             update(position,now=Date.now()) {
                 const time=new Date(position.atualizado_em).getTime();
@@ -63,7 +63,8 @@
                     if(lastFix!==position.atualizado_em) {offRouteFixes++;lastFix=position.atualizado_em;}
                     return {state:"off-route",recalculate:offRouteFixes>=2};
                 }
-                offRouteFixes=0;lastFix=position.atualizado_em;lastTime=time;initialized=true;
+                const estimatedSpeed=lastPosition && lastTime && time>lastTime ? distance(lastPosition,position)/((time-lastTime)/1000) : null;
+                offRouteFixes=0;lastFix=position.atualizado_em;lastTime=time;lastPosition={latitude:position.latitude,longitude:position.longitude};initialized=true;
                 progress=Math.max(progress,match.at);
                 let index=steps.findIndex(step=>step.end>progress+.5);if(index<0) index=steps.length-1;
                 const current=steps[index],remainingInStep=Math.max(0,current.end-progress);
@@ -73,7 +74,7 @@
                 else remainingSeconds=seconds(route.duracao)===null ? null : seconds(route.duracao)*remainingMeters/total;
                 return {state:remainingMeters<40 && distance(position,route.destino)<Math.max(25,position.precisao_m) ? "arrived" : "navigating",
                     index,current,next:steps[index+1],afterNext:steps[index+2],toNextMeters:remainingInStep,remainingMeters,remainingSeconds,
-                    speedKmh:Number.isFinite(position.velocidade_mps) && position.velocidade_mps>=0 ? Math.round(position.velocidade_mps*3.6) : null};
+                    speedKmh:Math.round(Math.max(0,Number.isFinite(position.velocidade_mps) && position.velocidade_mps>=0 ? position.velocidade_mps : estimatedSpeed || 0)*3.6)};
             }
         };
     }

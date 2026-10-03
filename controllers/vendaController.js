@@ -161,7 +161,11 @@ class VendaController {
             const pedido = await VendaService.atualizarStatusPedido(
                 empresaId,
                 id,
-                status
+                status,
+                {
+                    usuarioId: req.user.id,
+                    motivo: req.body?.motivoCancelamento || req.body?.motivo
+                }
             );
 
             if (!pedido) {

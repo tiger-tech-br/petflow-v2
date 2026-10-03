@@ -36,7 +36,7 @@
                 this.element.title = navigation ? "Sua posição GPS" : "Entregador";
                 this.icon = document.createElement("img");
                 this.icon.src = navigation ? "/images/icons/delivery-arrow.svg" : "/images/icons/delivery-car.svg";
-                this.icon.alt = ""; this.icon.width = this.icon.height = navigation ? 44 : 56;
+                this.icon.alt = ""; this.icon.width = this.icon.height = navigation ? 44 : 64;
                 this.element.appendChild(this.icon);
                 if (navigation) this.setHeading(this.heading);
                 this.getPanes().overlayMouseTarget.appendChild(this.element);
@@ -72,10 +72,10 @@
     window.PetFlowDeliveryMap = function ({ mode = "tracking" } = {}) {
         const navigation = mode === "driver";
         const element = document.getElementById("deliveryMap"), message = document.getElementById("mapStatus");
-        const recenter = navigation ? document.getElementById("recenterMap") : null;
+        const recenter = document.getElementById(navigation ? "recenterMap" : "centerTrackingMap");
         const showRoute = navigation ? document.getElementById("showFullRoute") : null;
         let map, driver, origin, destination, route, accuracy, lastPolyline, lastDestination, routeBounds, version = 0;
-        let currentPosition, previousPosition, heading = null, following = false, overview = true;
+        let currentPosition, currentDestination, previousPosition, heading = null, following = !navigation, overview = true;
         function resizeMarkers() {
             if (!map || !currentPosition) return;
             const metersPerPixel = 156543.03392 * Math.cos(currentPosition.lat * Math.PI / 180) / 2 ** map.getZoom();
@@ -84,7 +84,12 @@
         }
         function followPosition() {
             if (!map || !currentPosition || element.hidden) return false;
-            following = true; overview = false; map.setZoom(17); map.panTo(currentPosition); return true;
+            following = true; overview = false;
+            if (!navigation && currentDestination) {
+                const bounds = new google.maps.LatLngBounds(); bounds.extend(currentPosition); bounds.extend(currentDestination);
+                map.fitBounds(bounds, { top: 72, right: 42, bottom: 190, left: 42 });
+            } else { map.setZoom(17); map.panTo(currentPosition); }
+            return true;
         }
         recenter?.addEventListener("click", followPosition);
         showRoute?.addEventListener("click", () => {
@@ -93,7 +98,14 @@
         });
         return {
             follow: followPosition,
-            hide() { version++; element.hidden = true; message.textContent = ""; previousPosition = null; heading = null; following = false; overview = true; if (recenter) recenter.hidden = true; if (showRoute) showRoute.hidden = true; },
+            hide() { version++; element.hidden = true; message.textContent = ""; previousPosition = null; heading = null; following = !navigation; overview = true; if (recenter) recenter.hidden = true; if (showRoute) showRoute.hidden = true; },
+            resize() {
+                if (!map || element.hidden) return;
+                google.maps.event?.trigger(map, "resize");
+                if (!navigation) followPosition();
+                else if (following) map.panTo(currentPosition);
+                else if (overview && routeBounds) map.fitBounds(routeBounds, 40);
+            },
             async update(data) {
                 const current = ++version, address = data.endereco_entrega;
                 const originElement = document.getElementById("originAddress");
@@ -103,8 +115,8 @@
                 const endpoint = data.rota?.tipoOrigem === "GPS_ENTREGADOR" ? data.rota.destino : null;
                 const hasDestination = Number.isFinite(endpoint?.latitude) && Number.isFinite(endpoint?.longitude);
                 const startpoint = data.rota?.origem;
-                const hasRoute = Boolean(navigation && hasDestination && data.rota.polyline && Number.isFinite(startpoint?.latitude) && Number.isFinite(startpoint?.longitude));
-                if (originElement) originElement.textContent = hasPosition ? (navigation ? "Partida: posição GPS usada no último cálculo da rota." : "Localização do entregador: última posição GPS recebida.") : "Aguardando a localização do entregador.";
+                const hasRoute = Boolean(hasDestination && data.rota.polyline && Number.isFinite(startpoint?.latitude) && Number.isFinite(startpoint?.longitude));
+                if (originElement) originElement.textContent = hasPosition ? (hasRoute ? "Partida da rota: posição GPS usada no último cálculo." : "Localização do entregador: última posição GPS recebida.") : "Aguardando a localização do entregador.";
                 if (!hasPosition) { element.hidden = true; if (recenter) recenter.hidden = true; if (showRoute) showRoute.hidden = true; message.textContent = "Aguardando o entregador compartilhar o GPS para mostrar o mapa."; return; }
                 try {
                     message.textContent = "Carregando mapa...";
@@ -119,30 +131,27 @@
                         accuracy = new google.maps.Circle({ map, strokeOpacity: 0, fillColor: navigation ? "#2464d9" : "#00897b", fillOpacity: .1 });
                         driver = positionMarker(map, navigation);
                         destination = new google.maps.Circle({ map, radius: 14, fillColor: "#e97814", fillOpacity: 1, strokeColor: "#fff", strokeWeight: 3, zIndex: 2 });
-                        if (navigation) {
-                            origin = new google.maps.Circle({ map, radius: 12, fillColor: "#16834b", fillOpacity: 1, strokeColor: "#fff", strokeWeight: 3, zIndex: 2 });
-                            route = new google.maps.Polyline({ map, strokeColor: "#2464d9", strokeOpacity: .8, strokeWeight: 5 });
-                        }
+                        origin = new google.maps.Circle({ map, radius: 12, fillColor: "#16834b", fillOpacity: 1, strokeColor: "#fff", strokeWeight: 3, zIndex: 2 });
+                        route = new google.maps.Polyline({ map, strokeColor: navigation ? "#00d7f2" : "#2464d9", strokeOpacity: 1, strokeWeight: navigation ? 7 : 6, zIndex: 3 });
                         map.addListener("zoom_changed", resizeMarkers);
-                        if (navigation) map.addListener("dragstart", () => { following = false; overview = false; });
+                        map.addListener("dragstart", () => { following = false; overview = false; });
                     }
                     if (navigation) {
                         const nextHeading = Number.isFinite(data.heading) ? (data.heading % 360 + 360) % 360 : movementHeading(previousPosition, position, data.precisao_m);
                         if (nextHeading !== null) heading = nextHeading;
                         driver.setHeading(heading); previousPosition = position;
                         if (following) map.panTo(position);
-                        if (recenter) recenter.hidden = false;
                     }
+                    if (recenter) recenter.hidden = false;
                     driver.setPosition(position); accuracy.setCenter(currentPosition); accuracy.setRadius(hasPosition ? Math.max(0, Number(data.precisao_m) || 0) : 0);
                     destination.setVisible(hasDestination);
                     const destinationPosition = hasDestination ? { lat: endpoint.latitude, lng: endpoint.longitude } : null;
+                    currentDestination = destinationPosition;
                     if (hasDestination) destination.setCenter(destinationPosition);
-                    if (navigation) {
-                        origin.setVisible(hasRoute);
-                        if (hasRoute) origin.setCenter({ lat: startpoint.latitude, lng: startpoint.longitude });
-                        else { route.setPath([]); lastPolyline = null; routeBounds = null; }
-                        if (showRoute) showRoute.hidden = !hasRoute;
-                    }
+                    origin.setVisible(hasRoute);
+                    if (hasRoute) origin.setCenter({ lat: startpoint.latitude, lng: startpoint.longitude });
+                    else { route.setPath([]); lastPolyline = null; routeBounds = null; }
+                    if (showRoute) showRoute.hidden = !hasRoute;
                     resizeMarkers();
                     const routeChanged = hasRoute && lastPolyline !== data.rota.polyline;
                     if (routeChanged) {
@@ -155,15 +164,14 @@
                         route.getPath().forEach(point => routeBounds.extend(point));
                         routeBounds.extend({ lat: startpoint.latitude, lng: startpoint.longitude });
                         routeBounds.extend(destinationPosition); routeBounds.extend(position);
-                        if (overview && (routeChanged || !map.getBounds()?.contains(position))) map.fitBounds(routeBounds, 40);
+                        if (navigation && overview && (routeChanged || !map.getBounds()?.contains(position))) map.fitBounds(routeBounds, 40);
                     }
-                    if (!navigation && hasDestination && lastDestination !== JSON.stringify(destinationPosition)) {
-                        const bounds = new google.maps.LatLngBounds(); bounds.extend(position); bounds.extend(destinationPosition);
-                        map.fitBounds(bounds, 40); lastDestination = JSON.stringify(destinationPosition);
+                    if (!navigation && hasDestination && (following || lastDestination !== JSON.stringify(destinationPosition))) {
+                        followPosition(); lastDestination = JSON.stringify(destinationPosition);
                     }
                     message.textContent = navigation
                         ? `Seta azul: sua posição GPS · Verde: partida da rota · Laranja: destino. ${hasRoute ? "Siga a linha azul da rota." : "Aguardando a rota até o destino."} ${heading === null ? "Aguardando a primeira direção do GPS; a seta está voltada para cima." : "Sem uma nova direção, a seta mantém a última direção conhecida."}`
-                        : `Carrinho: última posição recebida do entregador. ${hasDestination ? "Ponto laranja: endereço da entrega." : "Aguardando a localização do endereço da entrega."}`;
+                        : `Van: última posição recebida do entregador. ${hasRoute ? "Linha azul: trajeto da partida verde até o destino laranja." : (hasDestination ? "Ponto laranja: endereço da entrega. Aguardando o trajeto." : "Aguardando a localização do endereço da entrega.")}`;
                 } catch (error) { if (current === version) { element.hidden = true; if (recenter) recenter.hidden = true; if (showRoute) showRoute.hidden = true; message.textContent = error.message; } }
             }
         };

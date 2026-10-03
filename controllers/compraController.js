@@ -3,245 +3,52 @@
 const CompraModel = require("../models/compraModel");
 const CompraService = require("../services/compraService");
 
-const CompraController = {
-
-    /* ==============================================
-       LISTAR
-    ============================================== */
-
-    async listar(req, res) {
-
-        try {
-
-            const empresaId = req.user.empresaId;
-
-            const compras = await CompraModel.listar(empresaId);
-
-            return res.status(200).json(compras);
-
-        } catch (error) {
-
-            console.error(error);
-
-            return res.status(500).json({
-
-                erro: "Erro ao listar compras."
-
-            });
-
-        }
-
-    },
-
-    /* ==============================================
-       BUSCAR POR ID
-    ============================================== */
-
-    async buscarPorId(req, res) {
-
-        try {
-
-            const empresaId = req.user.empresaId;
-
-            const compra = await CompraModel.buscarPorId(
-
-                req.params.id,
-
-                empresaId
-
-            );
-
-            if (!compra) {
-
-                return res.status(404).json({
-
-                    erro: "Compra não encontrada."
-
-                });
-
-            }
-
-            return res.status(200).json(compra);
-
-        } catch (error) {
-
-            console.error(error);
-
-            return res.status(500).json({
-
-                erro: "Erro ao buscar compra."
-
-            });
-
-        }
-
-    },
-
-    /* ==============================================
-       FINALIZAR COMPRA
-    ============================================== */
-
-    async criar(req, res) {
-
-        try {
-
-            const empresaId = req.user.empresaId;
-
-            const {
-
-                fornecedor_id,
-                data_compra,
-                observacoes,
-                itens
-
-            } = req.body;
-
-            if (!fornecedor_id) {
-
-                return res.status(400).json({
-
-                    erro: "Fornecedor obrigatório."
-
-                });
-
-            }
-
-            if (!Array.isArray(itens) || itens.length === 0) {
-
-                return res.status(400).json({
-
-                    erro: "Informe ao menos um item."
-
-                });
-
-            }
-
-            const resultado = await CompraService.finalizarCompra(
-
-                empresaId,
-
-                {
-
-                    fornecedor_id,
-                    data_compra,
-                    observacoes
-
-                },
-
-                itens
-
-            );
-
-            return res.status(201).json(resultado);
-
-        } catch (error) {
-
-            console.error(error);
-
-            return res.status(500).json({
-
-                erro: error.message
-
-            });
-
-        }
-
-    },
-
-    /* ==============================================
-       ATUALIZAR
-    ============================================== */
-
-    async atualizar(req, res) {
-
-        try {
-
-            const empresaId = req.user.empresaId;
-
-            const compra = await CompraModel.atualizar(
-
-                req.params.id,
-
-                empresaId,
-
-                req.body
-
-            );
-
-            if (!compra) {
-
-                return res.status(404).json({
-
-                    erro: "Compra não encontrada."
-
-                });
-
-            }
-
-            return res.status(200).json(compra);
-
-        } catch (error) {
-
-            console.error(error);
-
-            return res.status(500).json({
-
-                erro: "Erro ao atualizar compra."
-
-            });
-
-        }
-
-    },
-
-    /* ==============================================
-       EXCLUIR
-    ============================================== */
-
-    async excluir(req, res) {
-
-        try {
-
-            const empresaId = req.user.empresaId;
-
-            const compra = await CompraModel.excluir(
-
-                req.params.id,
-
-                empresaId
-
-            );
-
-            if (!compra) {
-
-                return res.status(404).json({
-
-                    erro: "Compra não encontrada."
-
-                });
-
-            }
-
-            return res.status(200).json({
-
-                mensagem: "Compra excluída com sucesso."
-
-            });
-
-        } catch (error) {
-
-            console.error(error);
-
-            return res.status(500).json({
-
-                erro: "Erro ao excluir compra."
-
-            });
-
-        }
-
+async function listar(req, res, next) {
+    try { return res.json({ success: true, data: await CompraModel.listar(req.user.empresaId) }); }
+    catch (error) { return next(error); }
+}
+
+async function buscarPorId(req, res, next) {
+    try {
+        const compra = await CompraModel.buscarPorId(req.params.id, req.user.empresaId);
+        if (!compra) return res.status(404).json({ success: false, message: "Compra não encontrada." });
+        return res.json({ success: true, data: compra });
+    } catch (error) { return next(error); }
+}
+
+async function criar(req, res, next) {
+    try {
+        const { fornecedor_id, data_compra, observacoes, itens } = req.body;
+        if (!fornecedor_id) return res.status(400).json({ success: false, message: "Fornecedor obrigatório." });
+        if (!Array.isArray(itens) || !itens.length) return res.status(400).json({ success: false, message: "Informe ao menos um item." });
+        const resultado = await CompraService.finalizarCompra(req.user.empresaId, {
+            fornecedor_id, data_compra, observacoes, usuario_id: req.user.id
+        }, itens);
+        return res.status(201).json({ success: true, message: resultado.message, data: resultado.compra });
+    } catch (error) {
+        if (!error.status && /quantidade|valor|produto|fornecedor/i.test(error.message)) error.status = 400;
+        return next(error);
     }
+}
 
-};
+async function atualizar(req, res) {
+    return res.status(405).json({ success: false,
+        message: "Compras recebidas não podem ser editadas. Cancele a compra para reverter estoque e financeiro." });
+}
 
-module.exports = CompraController;
+async function excluir(req, res) {
+    return res.status(405).json({ success: false,
+        message: "Compras não podem ser excluídas. Use o cancelamento para preservar o histórico." });
+}
+
+async function cancelar(req, res, next) {
+    try {
+        const compra = await CompraService.cancelarCompra(
+            req.user.empresaId, req.params.id, req.user.id, req.body?.motivo
+        );
+        if (!compra) return res.status(404).json({ success: false, message: "Compra não encontrada." });
+        return res.json({ success: true, message: "Compra cancelada e estoque/financeiro revertidos.", data: compra });
+    } catch (error) { return next(error); }
+}
+
+module.exports = { listar, buscarPorId, criar, atualizar, excluir, cancelar };

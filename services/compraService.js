@@ -7,6 +7,7 @@ const ItemCompraModel = require("../models/itemCompraModel");
 
 const MovimentacaoEstoqueService = require("./movimentacaoEstoqueService");
 const FinanceiroService = require("./financeiroService");
+const audit = require("./auditService");
 
 const CompraService = {
 
@@ -34,7 +35,9 @@ const CompraService = {
                 fornecedor_id: compra.fornecedor_id,
                 data_compra: compra.data_compra,
                 valor_total: 0,
-                observacoes: compra.observacoes
+                observacoes: compra.observacoes,
+                usuario_id: compra.usuario_id || null,
+                status: "RECEBIDA"
 
             }, client);
 
@@ -79,7 +82,13 @@ const CompraService = {
                     empresaId,
                     item.produto_id,
                     quantidade,
-                    client
+                    client,
+                    {
+                        usuarioId: compra.usuario_id,
+                        referenciaTipo: "COMPRA",
+                        referenciaId: novaCompra.id,
+                        observacao: "Entrada pela compra recebida"
+                    }
 
                 );
 
@@ -145,6 +154,45 @@ const CompraService = {
 
         }
 
+    },
+
+    async cancelarCompra(empresaId, compraId, usuarioId, motivo) {
+        const texto = String(motivo || "").trim();
+        if (texto.length < 5) throw Object.assign(new Error("Informe o motivo do cancelamento."), { status: 400 });
+
+        return db.transaction(async client => {
+            const result = await client.query(
+                "SELECT * FROM compras WHERE id=$1 AND empresa_id=$2 FOR UPDATE",
+                [compraId, empresaId]
+            );
+            const atual = result.rows[0];
+            if (!atual) return null;
+            if (atual.status === "CANCELADA") return atual;
+
+            const { rows: itens } = await client.query(
+                "SELECT produto_id,quantidade FROM itens_compra WHERE compra_id=$1 AND empresa_id=$2",
+                [compraId, empresaId]
+            );
+            for (const item of itens) {
+                await MovimentacaoEstoqueService.saida(empresaId, item.produto_id, item.quantidade, client, {
+                    usuarioId,
+                    referenciaTipo: "CANCELAMENTO_COMPRA",
+                    referenciaId: compraId,
+                    observacao: texto
+                });
+            }
+
+            const { rows } = await client.query(
+                `UPDATE compras SET status='CANCELADA',cancelado_em=NOW(),cancelado_por=$1,
+                 motivo_cancelamento=$2,updated_at=NOW()
+                 WHERE id=$3 AND empresa_id=$4 RETURNING *`,
+                [usuarioId, texto, compraId, empresaId]
+            );
+            await FinanceiroService.cancelarPorReferencia(empresaId, "COMPRA", compraId, client);
+            await audit.registrar({ empresaId, usuarioId, acao: "CANCELAR", entidade: "COMPRA",
+                entidadeId: compraId, descricao: `Compra cancelada: ${texto}`, anterior: atual, novo: rows[0] }, client);
+            return rows[0];
+        });
     }
 
 };

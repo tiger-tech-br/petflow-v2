@@ -19,6 +19,8 @@ async function findAll(empresaId) {
 
                 p.id,
 
+                p.categoria_id,
+
                 p.nome,
 
                 p.descricao,
@@ -258,11 +260,12 @@ async function update(id, produto, empresaId) {
 ================================================== */
 
 async function remove(id, empresaId) {
-
-    await db.query(
+    const result = await db.query(
 
         `
-            DELETE FROM produtos
+            UPDATE produtos
+
+            SET ativo = FALSE, status = FALSE, updated_at = NOW()
 
             WHERE
 
@@ -272,6 +275,7 @@ async function remove(id, empresaId) {
                 empresa_id = get_petflow_empresa_id()
                 OR ($2::uuid IS NOT NULL AND empresa_id = $2)
             )
+            RETURNING *
         `,
 
         [
@@ -283,6 +287,8 @@ async function remove(id, empresaId) {
         ]
 
     );
+
+    return result.rows[0] || null;
 
 }
 

@@ -721,6 +721,73 @@ textarea.form-control {
     resize: vertical;
 }
 
+.product-photo-field small {
+    color: var(--admin-muted);
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.product-photo-preview {
+    display: grid;
+    width: 100%;
+    min-height: 210px;
+    place-items: center;
+    overflow: hidden;
+    border: 1px dashed rgba(4, 118, 109, .34);
+    border-radius: 12px;
+    background: linear-gradient(145deg, #f8fcfb, #edf7f4);
+}
+
+.product-photo-preview img {
+    width: 100%;
+    height: 240px;
+    padding: 16px;
+    object-fit: contain;
+    background: #ffffff;
+}
+
+.product-photo-preview span {
+    display: grid;
+    justify-items: center;
+    gap: 9px;
+    color: var(--admin-muted);
+    font-size: 13px;
+    font-weight: 750;
+}
+
+.product-photo-preview i {
+    color: var(--admin-teal);
+    font-size: 34px;
+}
+
+.product-photo-input {
+    min-height: 48px;
+    padding: 8px;
+}
+
+.product-photo-input::file-selector-button {
+    min-height: 32px;
+    margin-right: 10px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 7px;
+    color: #ffffff;
+    background: var(--admin-teal);
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.admin-product-thumbnail {
+    display: block;
+    width: 58px;
+    height: 58px;
+    padding: 5px;
+    border: 1px solid var(--admin-line);
+    border-radius: 10px;
+    object-fit: contain;
+    background: #ffffff;
+}
+
 .form-actions {
     display: flex;
     gap: 10px;
@@ -728,6 +795,48 @@ textarea.form-control {
     flex-wrap: wrap;
     padding-top: 4px;
 }
+
+.form-check {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 42px;
+    color: var(--admin-ink);
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.form-check input {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--admin-teal);
+}
+
+.admin-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 18px;
+    color: var(--admin-muted);
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.admin-pagination > div { display: flex; gap: 8px; }
+.admin-pagination button:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+
+.admin-dialog {
+    width: min(520px, calc(100vw - 28px));
+    padding: 24px;
+    border: 1px solid var(--admin-line);
+    border-radius: 12px;
+    color: var(--admin-ink);
+    box-shadow: 0 28px 80px rgba(16, 33, 43, .28);
+}
+.admin-dialog::backdrop { background: rgba(16, 33, 43, .62); }
+.admin-dialog h3 { margin: 0 0 8px; }
+.admin-dialog p { color: var(--admin-muted); line-height: 1.5; }
 
 .btn-small {
     min-height: 34px;

@@ -70,6 +70,25 @@ async function consultarCheckout(checkoutId) {
     }
 }
 
+async function cancelarCobranca(chargeId, valor, idempotencyKey) {
+    if (!chargeId) {
+        const error = new Error("Cobrança do PagBank não identificada para reembolso.");
+        error.status = 409;
+        throw error;
+    }
+    const client = createClient();
+    try {
+        const { data } = await client.post(
+            `/charges/${encodeURIComponent(chargeId)}/cancel`,
+            { amount: { value: toCents(valor), currency: "BRL" } },
+            { headers: { "x-idempotency-key": String(idempotencyKey || chargeId).slice(0, 100) } }
+        );
+        return { id: data?.id || chargeId, status: data?.status || "CANCELED", raw: data };
+    } catch (error) {
+        throw buildPagSeguroError(error);
+    }
+}
+
 function buildCheckoutPayload(pedido) {
     const cliente = pedido.cliente || {};
     const items = Array.isArray(pedido.itens)
@@ -362,6 +381,7 @@ module.exports = {
     assertConfigured,
     criarCheckout,
     consultarCheckout,
+    cancelarCobranca,
     extrairEventoWebhook,
     validarAssinaturaWebhook,
     mapStatusToVenda

@@ -69,7 +69,7 @@
 
                             </li>
                             <li class="menu-item">
-                                <a href="/#newsletter" class="menu-link" data-public-nav="contact">Contato</a>
+                                <a href="/#localizacao" class="menu-link" data-public-nav="contact">Contato</a>
                             </li>
                             <li class="menu-item menu-login-item">
                                 <a href="/login" class="menu-link menu-login-link">Entrar</a>

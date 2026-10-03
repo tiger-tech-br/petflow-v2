@@ -23,7 +23,7 @@ const CompraModel = {
 
     },
 
-    async buscarPorId(id, empresaId) {
+    async buscarPorId(id, empresaId, client = db) {
 
         const query = `
             SELECT *
@@ -33,7 +33,7 @@ const CompraModel = {
             LIMIT 1;
         `;
 
-        const { rows } = await db.query(query, [
+        const { rows } = await client.query(query, [
 
             id,
             empresaId
@@ -53,11 +53,13 @@ const CompraModel = {
                 fornecedor_id,
                 data_compra,
                 valor_total,
-                observacoes
+                observacoes,
+                usuario_id,
+                status
 
             )
 
-            VALUES ($1, $2, $3, $4, $5)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
 
             RETURNING *;
         `;
@@ -68,7 +70,9 @@ const CompraModel = {
             dados.fornecedor_id,
             dados.data_compra,
             dados.valor_total,
-            dados.observacoes
+            dados.observacoes,
+            dados.usuario_id || null,
+            dados.status || "RECEBIDA"
 
         ];
 

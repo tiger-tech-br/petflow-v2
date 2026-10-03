@@ -14,6 +14,8 @@
     let records = [];
     let editingId = null;
     let selectedSaleId = null;
+    let currentPage = 1;
+    const pageSize = 25;
 
 
     document.addEventListener("DOMContentLoaded", () => {
@@ -22,6 +24,7 @@
         }
 
         setupAdminNavigation();
+        setupAdminTools();
         bindPageText();
         setupAdminLogout();
         buildInsights();
@@ -45,6 +48,8 @@
     function setupAdminNavigation() {
         const sidebar = document.querySelector(".sidebar");
         const topbar = document.querySelector(".topbar");
+
+        ensureAdminMenuLinks(sidebar);
 
         if (!sidebar || !topbar || topbar.querySelector(".admin-menu-toggle")) {
             return;
@@ -121,6 +126,36 @@
                 closeSidebar();
             }
         });
+    }
+
+    function ensureAdminMenuLinks(sidebar) {
+        const nav = sidebar?.querySelector(".sidebar-nav");
+        if (!nav) return;
+        const links = [
+            ["cupons", "/admin/pages/cupons/cupons.html", "fa-ticket", "Cupons"],
+            ["usuarios", "/admin/pages/usuarios/usuarios.html", "fa-user-shield", "Usuários"],
+            ["auditoria", "/admin/pages/auditoria/auditoria.html", "fa-clock-rotate-left", "Auditoria"]
+        ];
+        for (const [key, href, icon, label] of links) {
+            if (nav.querySelector(`[data-active-page="${key}"]`)) continue;
+            const link = document.createElement("a");
+            link.href = href;
+            link.dataset.activePage = key;
+            link.innerHTML = `<i class="fa-solid ${icon}"></i>${label}`;
+            nav.appendChild(link);
+        }
+    }
+
+    function setupAdminTools() {
+        const toolbar = document.querySelector(".toolbar");
+        if (!toolbar || toolbar.querySelector("[data-export-csv]")) return;
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "btn";
+        button.dataset.exportCsv = "";
+        button.innerHTML = '<i class="fa-solid fa-file-csv"></i>Exportar CSV';
+        button.addEventListener("click", exportCsv);
+        toolbar.appendChild(button);
     }
 
     function setupAdminLogout() {
@@ -290,6 +325,30 @@
             return buildItemsBuilderField(field);
         }
 
+        if (field.type === "file") {
+            return `
+                <div class="form-group product-photo-field">
+                    <label for="${escapeHtml(field.name)}">
+                        ${escapeHtml(field.label)}
+                    </label>
+
+                    <div class="product-photo-preview" data-file-preview="${escapeHtml(field.name)}">
+                        <img alt="Prévia da foto do produto" hidden>
+                        <span><i class="fa-regular fa-image"></i>Prévia da foto</span>
+                    </div>
+
+                    <input
+                        id="${escapeHtml(field.name)}"
+                        name="${escapeHtml(field.name)}"
+                        type="file"
+                        class="form-control product-photo-input"
+                        accept="${escapeHtml(field.accept || "image/jpeg,image/png,image/webp")}"
+                        ${required}>
+                    <small>${escapeHtml(field.help || "Envie uma imagem JPG, PNG ou WebP de até 5 MB.")}</small>
+                </div>
+            `;
+        }
+
         if (field.type === "textarea" || field.type === "json") {
             return `
                 <div class="form-group">
@@ -301,9 +360,18 @@
                         id="${escapeHtml(field.name)}"
                         name="${escapeHtml(field.name)}"
                         class="form-control"
+                        ${buildFieldAttributes(field)}
                         ${required}>${escapeHtml(value)}</textarea>
                 </div>
             `;
+        }
+
+        if (field.type === "checkbox") {
+            return `<label class="form-check">
+                <input id="${escapeHtml(field.name)}" name="${escapeHtml(field.name)}"
+                    type="checkbox" ${value === true ? "checked" : ""}>
+                <span>${escapeHtml(field.label)}</span>
+            </label>`;
         }
 
         if (field.type === "select" || field.type === "remote-select") {
@@ -456,7 +524,10 @@
         const form = document.getElementById("recordForm");
 
         if (search) {
-            search.addEventListener("input", renderTable);
+            search.addEventListener("input", () => {
+                currentPage = 1;
+                renderTable();
+            });
         }
 
         if (refresh) {
@@ -465,6 +536,14 @@
 
         if (form && !isSalesPage) {
             form.addEventListener("submit", saveRecord);
+            form.addEventListener("change", event => {
+                if (event.target?.type === "file") {
+                    renderFilePreview(
+                        event.target,
+                        event.target.dataset.currentUrl || ""
+                    );
+                }
+            });
         }
 
         document.addEventListener("click", event => {
@@ -484,6 +563,13 @@
                 event.target.closest("[data-action='clear-details']");
             const updateStatusButton =
                 event.target.closest("[data-action='update-sale-status']");
+            const cancelPurchaseButton =
+                event.target.closest("[data-action='cancel-purchase']");
+
+            if (cancelPurchaseButton) {
+                cancelPurchase(cancelPurchaseButton.dataset.id);
+                return;
+            }
 
             if (detailsButton && isSalesPage) {
                 showSaleDetails(detailsButton.dataset.id);
@@ -605,15 +691,18 @@
         event.preventDefault();
 
         const payload = readForm();
+        const requestPayload = hasFileFields()
+            ? buildMultipartPayload(payload)
+            : payload;
         setStatus("Salvando...");
 
         try {
             if (config.mode === "single") {
-                await apiPut(config.endpoint, payload);
+                await apiPut(config.endpoint, requestPayload);
             } else if (editingId) {
-                await apiPut(`${config.endpoint}/${editingId}`, payload);
+                await apiPut(`${config.endpoint}/${editingId}`, requestPayload);
             } else {
-                await apiPost(config.endpoint, payload);
+                await apiPost(config.endpoint, requestPayload);
             }
 
             resetForm();
@@ -641,7 +730,9 @@
     }
 
     function editRecord(id) {
-        const record = records.find(item => String(item.id) === String(id));
+        const record = records.find(item =>
+            String(getRecordValue(item, config.idKey || "id")) === String(id)
+        );
 
         if (!record) {
             return;
@@ -669,6 +760,19 @@
             }
 
             const value = getRecordValue(record, field.name, "");
+
+            if (field.type === "file") {
+                input.required = Boolean(field.required && !value);
+                input.dataset.currentUrl = value;
+                renderFilePreview(input, value);
+                return;
+            }
+
+            if (field.type === "checkbox") {
+                input.checked = value === true || value === "true";
+                return;
+            }
+
             input.value =
                 field.type === "json" && typeof value !== "string"
                     ? JSON.stringify(value || {}, null, 2)
@@ -703,6 +807,11 @@
                 return;
             }
 
+            if (field.type === "file") {
+                data[field.name] = input.files?.[0] || null;
+                return;
+            }
+
             let value = input.value.trim();
 
             if (field.type === "number") {
@@ -727,6 +836,67 @@
         return data;
     }
 
+    function hasFileFields() {
+        return (config.fields || []).some(field => field.type === "file");
+    }
+
+    function buildMultipartPayload(payload) {
+        const formData = new FormData();
+
+        (config.fields || []).forEach(field => {
+            const value = payload[field.name];
+
+            if (value === null || value === undefined || value === "") {
+                return;
+            }
+
+            if (field.type === "file") {
+                formData.append(field.name, value);
+                return;
+            }
+
+            formData.append(
+                field.name,
+                typeof value === "object" ? JSON.stringify(value) : String(value)
+            );
+        });
+
+        return formData;
+    }
+
+    function renderFilePreview(input, currentUrl = "") {
+        const preview = input.closest(".form-group")?.querySelector("[data-file-preview]");
+        const image = preview?.querySelector("img");
+        const placeholder = preview?.querySelector("span");
+
+        if (!preview || !image || !placeholder) {
+            return;
+        }
+
+        if (input.dataset.previewUrl) {
+            URL.revokeObjectURL(input.dataset.previewUrl);
+            delete input.dataset.previewUrl;
+        }
+
+        const file = input.files?.[0];
+        const source = file ? URL.createObjectURL(file) : currentUrl;
+
+        if (!source) {
+            image.hidden = true;
+            image.removeAttribute("src");
+            placeholder.hidden = false;
+            return;
+        }
+
+        if (file) {
+            input.dataset.previewUrl = source;
+        }
+
+        image.src = source;
+        image.hidden = false;
+        placeholder.hidden = true;
+    }
+
     function renderTable() {
         const head = document.getElementById("tableHead");
         const body = document.getElementById("tableBody");
@@ -740,13 +910,18 @@
         );
 
         const columns = config.columns || [];
-        const showActions = config.mode !== "single" && !isReadOnlyPage;
+        const showActions = config.mode !== "single" && !isReadOnlyPage &&
+            (config.allowEdit !== false || config.allowDelete !== false || config.key === "compras");
         const filtered = records.filter(record =>
             normalizeSearch(JSON.stringify(record)).includes(search)
         );
+        const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+        currentPage = Math.min(currentPage, totalPages);
+        const paged = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+        renderPagination(filtered.length, totalPages);
 
         if (isSalesPage) {
-            renderSalesList(head, body, filtered);
+            renderSalesList(head, body, paged);
             return;
         }
 
@@ -780,7 +955,7 @@
             return;
         }
 
-        body.innerHTML = filtered.map(record => `
+        body.innerHTML = paged.map(record => `
             <tr>
                 ${columns.map(column => `
                     <td>
@@ -800,6 +975,28 @@
                 ` : ""}
             </tr>
         `).join("");
+    }
+
+    function renderPagination(total, totalPages) {
+        const wrap = document.querySelector(".table-wrap");
+        if (!wrap) return;
+        let controls = wrap.parentElement.querySelector(".admin-pagination");
+        if (!controls) {
+            controls = document.createElement("div");
+            controls.className = "admin-pagination";
+            wrap.insertAdjacentElement("afterend", controls);
+            controls.addEventListener("click", event => {
+                const button = event.target.closest("button[data-page]");
+                if (!button) return;
+                currentPage = Math.max(1, Math.min(Number(button.dataset.page), Number(button.dataset.pages)));
+                renderTable();
+            });
+        }
+        controls.innerHTML = `<span>${total} registro(s) · página ${currentPage} de ${totalPages}</span>
+            <div><button class="btn btn-small" type="button" data-page="${currentPage - 1}" data-pages="${totalPages}"
+                ${currentPage <= 1 ? "disabled" : ""}>Anterior</button>
+            <button class="btn btn-small" type="button" data-page="${currentPage + 1}" data-pages="${totalPages}"
+                ${currentPage >= totalPages ? "disabled" : ""}>Próxima</button></div>`;
     }
 
     function renderSalesList(head, body, filtered) {
@@ -891,25 +1088,89 @@
             `;
         }
 
+        const id = getRecordValue(record, config.idKey || "id");
+
+        if (config.key === "compras") {
+            return record.status === "CANCELADA"
+                ? '<span class="status-badge">Cancelada</span>'
+                : `<button class="btn btn-small btn-danger" type="button"
+                    data-action="cancel-purchase" data-id="${escapeHtml(id)}">
+                    <i class="fa-solid fa-ban"></i>Cancelar</button>`;
+        }
+
         return `
-            <button
+            ${config.allowEdit === false ? "" : `<button
                 class="icon-btn"
                 type="button"
                 data-action="edit"
-                data-id="${escapeHtml(record.id)}"
+                data-id="${escapeHtml(id)}"
                 title="Editar">
                 <i class="fa-solid fa-pen"></i>
-            </button>
+            </button>`}
 
-            <button
+            ${config.allowDelete === false ? "" : `<button
                 class="icon-btn"
                 type="button"
                 data-action="delete"
-                data-id="${escapeHtml(record.id)}"
+                data-id="${escapeHtml(id)}"
                 title="Excluir">
                 <i class="fa-solid fa-trash"></i>
-            </button>
+            </button>`}
         `;
+    }
+
+    async function cancelPurchase(id) {
+        const motivo = await askReason(
+            "Cancelar compra",
+            "Explique o cancelamento. O estoque e a conta a pagar serão revertidos."
+        );
+        if (!motivo) return;
+        setStatus("Cancelando compra...");
+        try {
+            await apiPost(`${config.endpoint}/${id}/cancelar`, { motivo });
+            await loadData();
+            setStatus("Compra cancelada com sucesso.");
+        } catch (error) {
+            setStatus(error.message || "Não foi possível cancelar a compra.");
+        }
+    }
+
+    function askReason(title, description) {
+        return new Promise(resolve => {
+            const dialog = document.createElement("dialog");
+            dialog.className = "admin-dialog";
+            dialog.innerHTML = `<form method="dialog">
+                <h3>${escapeHtml(title)}</h3><p>${escapeHtml(description)}</p>
+                <textarea class="form-control" minlength="5" maxlength="500" required></textarea>
+                <div class="form-actions"><button class="btn" value="cancel">Voltar</button>
+                <button class="btn btn-danger" value="confirm">Confirmar</button></div></form>`;
+            document.body.appendChild(dialog);
+            dialog.addEventListener("close", () => {
+                const text = dialog.returnValue === "confirm"
+                    ? dialog.querySelector("textarea").value.trim() : "";
+                dialog.remove();
+                resolve(text.length >= 5 ? text : "");
+            });
+            dialog.showModal();
+            dialog.querySelector("textarea").focus();
+        });
+    }
+
+    function exportCsv() {
+        const search = normalizeSearch(document.getElementById("pageSearch")?.value || "");
+        const list = records.filter(record => normalizeSearch(JSON.stringify(record)).includes(search));
+        const columns = config.columns || [];
+        const quote = value => `"${String(value ?? "").replaceAll('"', '""')}"`;
+        const rows = [columns.map(column => quote(column.label)).join(";")];
+        for (const record of list) {
+            rows.push(columns.map(column => quote(getRecordValue(record, column.key, ""))).join(";"));
+        }
+        const blob = new Blob(["\uFEFF" + rows.join("\r\n")], { type: "text/csv;charset=utf-8" });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = `${config.key}-${new Date().toISOString().slice(0, 10)}.csv`;
+        link.click();
+        URL.revokeObjectURL(link.href);
     }
 
     function renderSaleEmptyState(container) {
@@ -1274,8 +1535,16 @@
         setStatus("Atualizando status do pedido...");
 
         try {
+            const motivoCancelamento = status === "CANCELADA"
+                ? await askReason("Cancelar pedido", "Informe o motivo. Se o pedido estiver pago, o PagBank será acionado para o reembolso.")
+                : "";
+            if (status === "CANCELADA" && !motivoCancelamento) {
+                setStatus("Cancelamento não realizado.");
+                return;
+            }
             await patchRequest(`${config.endpoint}/${id}/status`, {
-                status
+                status,
+                motivoCancelamento
             });
 
             await loadData();
@@ -1427,6 +1696,10 @@
 
         if (Array.isArray(value)) {
             return `${value.length} item(ns)`;
+        }
+
+        if (column.type === "image") {
+            return `<img class="admin-product-thumbnail" src="${escapeHtml(String(value))}" alt="Foto do produto" loading="lazy">`;
         }
 
         if (

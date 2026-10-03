@@ -70,9 +70,15 @@ const produtoValidation = [
 
     body("descricao")
 
-        .optional()
+        .trim()
 
-        .trim(),
+        .notEmpty()
+
+        .withMessage("A descrição do produto é obrigatória.")
+
+        .isLength({ min: 10, max: 2000 })
+
+        .withMessage("A descrição deve possuir entre 10 e 2000 caracteres."),
 
     body("sku")
 

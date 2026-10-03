@@ -42,7 +42,7 @@ class FinanceiroModel {
        BUSCAR POR ID
     ========================== */
 
-    static async buscarPorId(id, empresaId) {
+    static async buscarPorId(id, empresaId, client = db) {
 
         const query = `
             SELECT *
@@ -55,7 +55,7 @@ class FinanceiroModel {
             LIMIT 1;
         `;
 
-        const { rows } = await db.query(query, [
+        const { rows } = await client.query(query, [
 
             id,
             empresaId
@@ -85,7 +85,8 @@ class FinanceiroModel {
                 data_vencimento,
                 data_pagamento,
                 status,
-                observacoes
+                observacoes,
+                criado_por
 
             )
 
@@ -101,7 +102,8 @@ class FinanceiroModel {
                 $8,
                 $9,
                 $10,
-                $11
+                $11,
+                $12
 
             )
 
@@ -120,7 +122,8 @@ class FinanceiroModel {
             dados.data_vencimento,
             dados.data_pagamento || null,
             dados.status || "PENDENTE",
-            dados.observacoes || null
+            dados.observacoes || null,
+            dados.criado_por || null
 
         ];
 
@@ -208,6 +211,27 @@ class FinanceiroModel {
 
         return rows[0];
 
+    }
+
+    static async buscarPorReferencia(empresaId, origem, referenciaId, client = db) {
+        const { rows } = await client.query(
+            `SELECT * FROM financeiro
+             WHERE empresa_id=$1 AND origem=$2 AND referencia_id=$3
+             ORDER BY created_at DESC LIMIT 1`,
+            [empresaId, origem, referenciaId]
+        );
+        return rows[0] || null;
+    }
+
+    static async cancelarPorReferencia(empresaId, origem, referenciaId, client = db) {
+        const { rows } = await client.query(
+            `UPDATE financeiro SET status='CANCELADO', updated_at=NOW(),
+             observacoes=CONCAT_WS(E'\n', observacoes, 'Cancelado automaticamente pela operação de origem.')
+             WHERE empresa_id=$1 AND origem=$2 AND referencia_id=$3 AND status <> 'CANCELADO'
+             RETURNING *`,
+            [empresaId, origem, referenciaId]
+        );
+        return rows[0] || null;
     }
 
     /* ==========================

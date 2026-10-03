@@ -93,6 +93,12 @@ async function consultarPagamento(request, response, next) {
                 pedido.pagseguro_checkout_id,
                 dadosPagamento
             )
+            : status === "CANCELADA"
+                ? await VendaService.cancelarPedido(customer.empresaId, pedido.id, {
+                    motivo: `Pagamento ${checkout.status || "cancelado"} pelo PagBank`,
+                    skipRefund: true,
+                    pagseguroStatus: checkout.status
+                })
             : await VendaService.atualizarStatusPagamento(
                 customer.empresaId,
                 pedido.pagseguro_checkout_id,
@@ -150,6 +156,13 @@ async function receberWebhook(request, response, next) {
                 event.referenceId,
                 dadosPagamento
             );
+        } else if (event.vendaStatus === "CANCELADA") {
+            const venda = await VendaModel.buscarPorReferenciaPagamento(event.referenceId);
+            if (venda) await VendaService.cancelarPedido(venda.empresa_id, venda.id, {
+                motivo: `Pagamento ${event.pagseguroStatus || "cancelado"} pelo PagBank`,
+                skipRefund: true,
+                pagseguroStatus: event.pagseguroStatus
+            });
         } else {
             await VendaService.atualizarStatusPagamento(
                 null,

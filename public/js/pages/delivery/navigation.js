@@ -43,7 +43,12 @@
             speak(approaching ? `Em ${meters(result.toNextMeters)}, ${instruction.instrucao}` : instruction.instrucao,`${routeKey}:${result.index}:${bucket}`);
         }
         el.toggleVoice.addEventListener("click",()=>{
-            voice=!voice;el.toggleVoice.textContent=voice ? "Voz ligada" : "Voz desligada";el.toggleVoice.setAttribute("aria-pressed",String(voice));
+            voice=!voice;
+            el.toggleVoice.querySelector(".control-icon").textContent=voice ? "🔊" : "🔇";
+            el.toggleVoice.querySelector(".sr-only").textContent=voice ? "Voz ligada" : "Voz desligada";
+            el.toggleVoice.setAttribute("aria-label",voice ? "Desligar orientação por voz" : "Ligar orientação por voz");
+            el.toggleVoice.title=voice ? "Desligar orientação por voz" : "Ligar orientação por voz";
+            el.toggleVoice.setAttribute("aria-pressed",String(voice));
             if(!voice) speech.cancel();else {spoken.clear();render();}
         });
         setInterval(render,5000);document.addEventListener("visibilitychange",()=>{if(document.hidden){if(voice)speech.cancel();}else render();});

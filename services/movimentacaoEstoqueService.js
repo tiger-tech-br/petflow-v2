@@ -8,7 +8,7 @@ const MovimentacaoEstoqueService = {
        ENTRADA DE ESTOQUE
     ============================================== */
 
-    async entrada(empresaId, produtoId, quantidade, client = db) {
+    async entrada(empresaId, produtoId, quantidade, client = db, metadata = {}) {
 
         quantidade = Number(quantidade);
 
@@ -60,6 +60,7 @@ const MovimentacaoEstoqueService = {
 
             ]);
 
+            await registrarMovimentacao(client, empresaId, produtoId, "ENTRADA", quantidade, 0, rows[0].quantidade, metadata);
             return rows[0];
 
         }
@@ -85,6 +86,8 @@ const MovimentacaoEstoqueService = {
 
         ]);
 
+        await registrarMovimentacao(client, empresaId, produtoId, metadata.tipo || "ENTRADA", quantidade,
+            Number(rows[0].quantidade) - quantidade, rows[0].quantidade, metadata);
         return rows[0];
 
     },
@@ -93,7 +96,7 @@ const MovimentacaoEstoqueService = {
        SAÍDA DE ESTOQUE
     ============================================== */
 
-    async saida(empresaId, produtoId, quantidade, client = db) {
+    async saida(empresaId, produtoId, quantidade, client = db, metadata = {}) {
         quantidade = Number(quantidade);
         if (!Number.isInteger(quantidade) || quantidade <= 0) throw new Error("Quantidade inválida.");
         const { rows } = await client.query(`
@@ -106,6 +109,8 @@ const MovimentacaoEstoqueService = {
             error.status = 409;
             throw error;
         }
+        await registrarMovimentacao(client, empresaId, produtoId, metadata.tipo || "SAIDA", quantidade,
+            Number(rows[0].quantidade) + quantidade, rows[0].quantidade, metadata);
         return rows[0];
     },
 
@@ -113,7 +118,7 @@ const MovimentacaoEstoqueService = {
        AJUSTE MANUAL
     ============================================== */
 
-    async ajustar(empresaId, produtoId, quantidade, client = db) {
+    async ajustar(empresaId, produtoId, quantidade, client = db, metadata = {}) {
 
         quantidade = Number(quantidade);
 
@@ -123,6 +128,7 @@ const MovimentacaoEstoqueService = {
 
         }
 
+        const anterior = await this.consultar(empresaId, produtoId, client);
         const query = `
             UPDATE estoque
             SET
@@ -144,6 +150,11 @@ const MovimentacaoEstoqueService = {
 
         ]);
 
+        if (rows[0] && Number(anterior?.quantidade) !== Number(rows[0].quantidade)) {
+            await registrarMovimentacao(client, empresaId, produtoId, "AJUSTE",
+                Math.abs(Number(rows[0].quantidade) - Number(anterior?.quantidade || 0)),
+                anterior?.quantidade || 0, rows[0].quantidade, metadata);
+        }
         return rows[0];
 
     },
@@ -203,5 +214,17 @@ const MovimentacaoEstoqueService = {
     }
 
 };
+
+async function registrarMovimentacao(client, empresaId, produtoId, tipo, quantidade, saldoAnterior, saldoNovo, metadata) {
+    await client.query(
+        `INSERT INTO movimentacoes_estoque
+         (empresa_id,produto_id,tipo,quantidade,observacao,usuario_id,
+          referencia_tipo,referencia_id,saldo_anterior,saldo_novo)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+        [empresaId, produtoId, tipo, quantidade, metadata.observacao || null,
+            metadata.usuarioId || null, metadata.referenciaTipo || null,
+            metadata.referenciaId || null, saldoAnterior, saldoNovo]
+    );
+}
 
 module.exports = MovimentacaoEstoqueService;

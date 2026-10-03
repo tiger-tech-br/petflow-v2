@@ -15,6 +15,10 @@ const MovimentacaoEstoqueService = require(
 
 const FinanceiroService = require("./financeiroService");
 const CupomService = require("./cupomService");
+const PagSeguroService = require("./pagseguroService");
+const audit = require("./auditService");
+
+const RESERVA_MINUTOS = Math.min(1440, Math.max(10, Number(process.env.ORDER_RESERVATION_MINUTES) || 30));
 
 const {
     sendOptionalEmail,
@@ -89,6 +93,7 @@ const VendaService = {
             throw new Error("Acréscimo inválido.");
         }
 
+        await liberarReservasExpiradas(empresaId);
         const client = await db.connect();
 
         try {
@@ -249,6 +254,21 @@ const VendaService = {
 
                 itensCriados.push(novoItem);
 
+                await MovimentacaoEstoqueService.saida(
+                    empresaId, produtoId, quantidade, client,
+                    { referenciaTipo: "RESERVA_VENDA", referenciaId: novaVenda.id,
+                        observacao: "Reserva temporária do pedido" }
+                );
+                await client.query(
+                    `INSERT INTO reservas_estoque
+                     (empresa_id,venda_id,produto_id,quantidade,expira_em)
+                     VALUES ($1,$2,$3,$4,NOW()+($5::text || ' minutes')::interval)
+                     ON CONFLICT (venda_id,produto_id) DO UPDATE
+                     SET quantidade=reservas_estoque.quantidade+EXCLUDED.quantidade,
+                         expira_em=EXCLUDED.expira_em`,
+                    [empresaId, novaVenda.id, produtoId, quantidade, RESERVA_MINUTOS]
+                );
+
                 valorTotalBruto += subtotal;
 
             }
@@ -256,7 +276,8 @@ const VendaService = {
             valorTotalBruto = Math.round(valorTotalBruto * 100) / 100;
             let cupomCodigo = null;
             if (venda.cupomCodigo != null && venda.cupomCodigo !== "") {
-                const cupom = await CupomService.validar(client, empresaId, venda.cupomCodigo, Math.round(valorTotalBruto * 100), true);
+                const cupom = await CupomService.validar(client, empresaId, venda.cupomCodigo,
+                    Math.round(valorTotalBruto * 100), true, venda.cliente_id || venda.clienteId || null);
                 desconto = cupom.desconto;
                 cupomCodigo = cupom.codigo;
             }
@@ -289,9 +310,12 @@ const VendaService = {
 
             const { rows: [vendaAtualizada] } = await client.query(
                 `UPDATE vendas SET valor_total=$1, desconto=$2, cupom_codigo=$3,
-                 valor_final=$1::numeric-$2::numeric+acrescimo+valor_frete, updated_at=NOW()
+                 valor_final=$1::numeric-$2::numeric+acrescimo+valor_frete,
+                 estoque_baixado_em=NOW(),
+                 reserva_expira_em=NOW()+($6::text || ' minutes')::interval,
+                 updated_at=NOW()
                  WHERE id=$4 AND empresa_id=$5 RETURNING *`,
-                [valorTotalBruto, desconto, cupomCodigo, novaVenda.id, empresaId]
+                [valorTotalBruto, desconto, cupomCodigo, novaVenda.id, empresaId, RESERVA_MINUTOS]
             );
 
             await client.query("COMMIT");
@@ -344,9 +368,13 @@ const VendaService = {
                 return null;
             }
 
+            if (venda.status === "CANCELADA") {
+                throw Object.assign(new Error("Este pedido foi cancelado e não pode receber pagamento."), { status: 409 });
+            }
+
             let shouldNotifyPayment = false;
 
-            if (venda.estoque_baixado_em || ["PAGAMENTO_APROVADO", "EM_SEPARACAO", "SAIU_PARA_ENTREGA", "ENTREGUE", "FINALIZADA"].includes(venda.status)) {
+            if (["PAGAMENTO_APROVADO", "EM_SEPARACAO", "SAIU_PARA_ENTREGA", "ENTREGUE", "FINALIZADA"].includes(venda.status)) {
                 await VendaModel.atualizarPagamentoPorReferencia(
                     referencia,
                     {
@@ -362,19 +390,14 @@ const VendaService = {
 
             shouldNotifyPayment = true;
 
-            const itens = await listarItensVenda(
-                venda.id,
-                venda.empresa_id,
-                client
-            );
-
-            for (const item of itens) {
-                await MovimentacaoEstoqueService.saida(
-                    venda.empresa_id,
-                    item.produto_id,
-                    item.quantidade,
-                    client
-                );
+            if (!venda.estoque_baixado_em) {
+                const itens = await listarItensVenda(venda.id, venda.empresa_id, client);
+                for (const item of itens) {
+                    await MovimentacaoEstoqueService.saida(
+                        venda.empresa_id, item.produto_id, item.quantidade, client,
+                        { referenciaTipo: "VENDA", referenciaId: venda.id, observacao: "Baixa por pagamento aprovado" }
+                    );
+                }
             }
 
             const vendaAtualizada =
@@ -388,6 +411,10 @@ const VendaService = {
                 );
 
             await client.query("UPDATE vendas SET estoque_baixado_em = NOW() WHERE id = $1", [venda.id]);
+            await client.query(
+                "UPDATE reservas_estoque SET confirmada_em=COALESCE(confirmada_em,NOW()) WHERE venda_id=$1 AND liberada_em IS NULL",
+                [venda.id]
+            );
             await gerarFinanceiroSeNaoExistir(
                 venda.empresa_id,
                 vendaAtualizada || venda,
@@ -422,13 +449,17 @@ const VendaService = {
        ATUALIZAR STATUS DO PEDIDO
     ============================================== */
 
-    async atualizarStatusPedido(empresaId, vendaId, status) {
+    async atualizarStatusPedido(empresaId, vendaId, status, options = {}) {
 
         if (status === "PAGAMENTO_APROVADO") {
             return this.confirmarPagamento(
                 empresaId,
                 vendaId
             );
+        }
+
+        if (status === "CANCELADA") {
+            return this.cancelarPedido(empresaId, vendaId, options);
         }
 
         const result = await db.transaction(async client => {
@@ -450,6 +481,75 @@ const VendaService = {
         if (result.changed) await enviarEmailStatusPedido(result.sale,status);
         return result.sale;
 
+    },
+
+    async cancelarPedido(empresaId, vendaId, options = {}) {
+        const preview = await VendaModel.buscarPorId(vendaId, empresaId);
+        if (!preview) return null;
+        if (preview.status === "CANCELADA") return preview;
+        if (["ENTREGUE", "FINALIZADA"].includes(preview.status)) {
+            throw Object.assign(new Error("Pedido entregue deve seguir um processo de devolução, não cancelamento."), { status: 409 });
+        }
+
+        const motivo = String(options.motivo || "Cancelado pelo administrador").trim().slice(0, 500);
+        const pago = ["PAGAMENTO_APROVADO", "EM_SEPARACAO", "SAIU_PARA_ENTREGA"].includes(preview.status);
+        let reembolso = null;
+        if (pago && !options.skipRefund) {
+            if (!preview.pagseguro_charge_id) {
+                throw Object.assign(new Error("O pedido pago não possui identificador da cobrança. Faça o estorno no PagBank e registre o cancelamento depois."), { status: 409 });
+            }
+            reembolso = await PagSeguroService.cancelarCobranca(
+                preview.pagseguro_charge_id,
+                preview.valor_final,
+                `cancel-${preview.id}`
+            );
+        }
+
+        const result = await db.transaction(async client => {
+            const { rows } = await client.query(
+                "SELECT * FROM vendas WHERE id=$1 AND empresa_id=$2 FOR UPDATE",
+                [vendaId, empresaId]
+            );
+            const current = rows[0];
+            if (!current) return null;
+            if (current.status === "CANCELADA") return { sale: current, changed: false };
+            if (["ENTREGUE", "FINALIZADA"].includes(current.status)) {
+                throw Object.assign(new Error("Pedido entregue não pode ser cancelado."), { status: 409 });
+            }
+
+            if (current.estoque_baixado_em && !current.estoque_devolvido_em) {
+                const itens = await listarItensVenda(current.id, empresaId, client);
+                for (const item of itens) {
+                    await MovimentacaoEstoqueService.entrada(
+                        empresaId, item.produto_id, item.quantidade, client,
+                        { tipo: "DEVOLUCAO", usuarioId: options.usuarioId,
+                            referenciaTipo: "CANCELAMENTO_VENDA", referenciaId: current.id,
+                            observacao: motivo }
+                    );
+                }
+            }
+
+            const updated = await client.query(
+                `UPDATE vendas SET status='CANCELADA',estoque_devolvido_em=COALESCE(estoque_devolvido_em,NOW()),
+                 cancelado_em=NOW(),cancelado_por=$1,cancelamento_motivo=$2,
+                 reembolso_status=$3,reembolso_id=$4,pagseguro_status=COALESCE($5,pagseguro_status),updated_at=NOW()
+                 WHERE id=$6 AND empresa_id=$7 RETURNING *`,
+                [options.usuarioId || null, motivo,
+                    reembolso ? "PROCESSADO" : (pago ? "CONFIRMADO_PELO_PROVEDOR" : "NAO_APLICAVEL"),
+                    reembolso?.id || null, options.pagseguroStatus || null, current.id, empresaId]
+            );
+            await client.query(
+                "UPDATE reservas_estoque SET liberada_em=NOW() WHERE venda_id=$1 AND confirmada_em IS NULL AND liberada_em IS NULL",
+                [current.id]
+            );
+            await FinanceiroService.cancelarPorReferencia(empresaId, "VENDA", current.id, client);
+            await audit.registrar({ empresaId, usuarioId: options.usuarioId || null,
+                acao: pago ? "REEMBOLSAR_CANCELAR" : "CANCELAR", entidade: "VENDA", entidadeId: current.id,
+                descricao: `Pedido cancelado: ${motivo}`, anterior: current, novo: updated.rows[0] }, client);
+            return { sale: updated.rows[0], changed: true };
+        });
+        if (result?.changed) await enviarEmailStatusPedido(result.sale, "CANCELADA");
+        return result?.sale || null;
     },
 
     /* ==============================================
@@ -485,6 +585,39 @@ const VendaService = {
     }
 
 };
+
+async function liberarReservasExpiradas(empresaId) {
+    await db.transaction(async client => {
+        const { rows: vendas } = await client.query(
+            `SELECT v.* FROM vendas v
+             WHERE v.empresa_id=$1 AND v.status='AGUARDANDO_PAGAMENTO'
+               AND v.pagseguro_checkout_id IS NULL
+               AND v.reserva_expira_em IS NOT NULL AND v.reserva_expira_em<=NOW()
+             FOR UPDATE SKIP LOCKED`,
+            [empresaId]
+        );
+        for (const venda of vendas) {
+            const { rows: reservas } = await client.query(
+                `SELECT * FROM reservas_estoque WHERE venda_id=$1
+                 AND confirmada_em IS NULL AND liberada_em IS NULL FOR UPDATE`,
+                [venda.id]
+            );
+            for (const reserva of reservas) {
+                await MovimentacaoEstoqueService.entrada(
+                    venda.empresa_id, reserva.produto_id, reserva.quantidade, client,
+                    { tipo: "DEVOLUCAO", referenciaTipo: "RESERVA_EXPIRADA", referenciaId: venda.id,
+                        observacao: "Reserva expirada antes do pagamento" }
+                );
+            }
+            await client.query("UPDATE reservas_estoque SET liberada_em=NOW() WHERE venda_id=$1 AND liberada_em IS NULL", [venda.id]);
+            await client.query(
+                `UPDATE vendas SET status='CANCELADA',estoque_devolvido_em=NOW(),cancelado_em=NOW(),
+                 cancelamento_motivo='Reserva de estoque expirada antes do pagamento',updated_at=NOW()
+                 WHERE id=$1`, [venda.id]
+            );
+        }
+    });
+}
 
 async function buscarVendaPagamento(referencia, empresaId, client) {
 
