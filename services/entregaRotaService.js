@@ -13,7 +13,7 @@ async function calcularRota(position, destination) {
         response = await fetch("https://routes.googleapis.com/directions/v2:computeRoutes", {
             method: "POST", signal: AbortSignal.timeout(10000),
             headers: { "Content-Type": "application/json", "X-Goog-Api-Key": key,
-                "X-Goog-FieldMask": "routes.distanceMeters,routes.duration,routes.polyline.encodedPolyline,routes.legs.startLocation,routes.legs.endLocation" },
+                "X-Goog-FieldMask": "routes.distanceMeters,routes.duration,routes.polyline.encodedPolyline,routes.legs.startLocation,routes.legs.endLocation,routes.legs.steps.distanceMeters,routes.legs.steps.staticDuration,routes.legs.steps.polyline.encodedPolyline,routes.legs.steps.startLocation,routes.legs.steps.endLocation,routes.legs.steps.navigationInstruction" },
             body: JSON.stringify({ origin: { location: { latLng: { latitude: position.latitude, longitude: position.longitude } } },
                 destination: { address: [address.endereco,address.numero,address.bairro,address.cidade,address.estado,address.cep,"Brasil"].join(", ") },
                 travelMode: "DRIVE", routingPreference: "TRAFFIC_UNAWARE", languageCode: "pt-BR", units: "METRIC" })
@@ -24,6 +24,14 @@ async function calcularRota(position, destination) {
     if (!response.ok || !route?.polyline?.encodedPolyline || !validPoint(start) || !validPoint(end)) {
         throw fail("Rota indisponível. Confira o endereço da entrega e a configuração da Routes API.");
     }
-    return { tipoOrigem: "GPS_ENTREGADOR", polyline: route.polyline.encodedPolyline, origem: start, destino: end, distanciaMetros: route.distanceMeters, duracao: route.duration, calculadaEm: new Date().toISOString() };
+    const rawSteps = route.legs.flatMap(leg => Array.isArray(leg.steps) ? leg.steps : []);
+    const steps = rawSteps.map(step => ({
+        instrucao: typeof step.navigationInstruction?.instructions === "string" ? step.navigationInstruction.instructions : "",
+        manobra: typeof step.navigationInstruction?.maneuver === "string" ? step.navigationInstruction.maneuver : "MANEUVER_UNSPECIFIED",
+        distanciaMetros: step.distanceMeters, duracao: step.staticDuration,
+        polyline: step.polyline?.encodedPolyline,
+        origem: step.startLocation?.latLng, destino: step.endLocation?.latLng
+    }));
+    return { tipoOrigem: "GPS_ENTREGADOR", polyline: route.polyline.encodedPolyline, origem: start, destino: end, distanciaMetros: route.distanceMeters, duracao: route.duration, etapas: steps, calculadaEm: new Date().toISOString() };
 }
 module.exports = { calcularRota };

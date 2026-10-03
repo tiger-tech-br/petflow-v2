@@ -110,15 +110,15 @@ test("sessão de cliente não permite abrir acompanhamento administrativo", asyn
     assert.match(h.elements.trackingStatus.textContent,/Entre no painel administrativo/);
 });
 function mapHarness(mode = "tracking", delayMarker = false) {
-    const elements=Object.fromEntries(["deliveryMap","mapStatus","originAddress","destinationAddress","recenterMap"].map(id=>[id,element()]));
+    const elements=Object.fromEntries(["deliveryMap","mapStatus","originAddress","destinationAddress","recenterMap","showFullRoute"].map(id=>[id,element()]));
     const paths=[], centers=[], vehicles=[], circles=[], maps=[], pans=[], fits=[]; let ready;
     const domElement = () => ({ ...element(), style: {}, children: [], setAttribute() {}, appendChild(child) { this.children.push(child); }, remove() {} });
     const ctx={URLSearchParams,console,setTimeout,clearTimeout,document:{getElementById:id=>elements[id],createElement:domElement,head:{appendChild(){ready=()=>ctx.petflowMapsReady();}}},fetch:async()=>({ok:true,json:async()=>({data:{browserKey:"public-key"}})}),google:{maps:{
-        Map:class{constructor(el,options){this.options=options;this.events={};maps.push(this);}fitBounds(b){fits.push(b);}panTo(p){pans.push(p);}getZoom(){return 15;}addListener(name,fn){this.events[name]=fn;}},
+        Map:class{constructor(el,options){this.options=options;this.events={};maps.push(this);}fitBounds(b){fits.push(b);}getBounds(){return{contains:()=>this.inside!==false};}panTo(p){pans.push(p);}getZoom(){return 15;}addListener(name,fn){this.events[name]=fn;}},
         Circle:class{constructor(){circles.push(this);}setCenter(p){this.center=p;centers.push(p);}setRadius(){}setVisible(v){this.visible=v;}},
         OverlayView:class{setMap(){vehicles.push(this);if(!delayMarker)this.onAdd();}getPanes(){return{overlayMouseTarget:{appendChild(){}}};}getProjection(){return{fromLatLngToDivPixel:p=>({x:p.lng*100,y:p.lat*100})};}},
         LatLng:class{constructor(p){Object.assign(this,p);}},
-        Polyline:class{setPath(p){paths.push(p);}},LatLngBounds:class{extend(){}},geometry:{encoding:{decodePath:()=>[{lat:-23,lng:-46}]}}
+        Polyline:class{setPath(p){this.path=p;paths.push(p);}getPath(){return this.path;}},LatLngBounds:class{constructor(){this.points=[];}extend(p){this.points.push(p);return this;}},geometry:{encoding:{decodePath:()=>[{lat:-23,lng:-46}]}}
     }}};
     ctx.window=ctx;vm.runInNewContext(source("map"),ctx);
     return { elements,paths,centers,vehicles,circles,maps,pans,fits,map:ctx.PetFlowDeliveryMap({mode}),ready:()=>ready() };
@@ -137,33 +137,48 @@ test("cliente vê carrinho e destino sem linha de rota e mapa não reaparece ap�
     assert.notEqual(h.vehicles[0].element.style.top,previous,"O carrinho segue o GPS recebido");
     assert.equal(h.circles[1].center.lat,-23.67,"O destino continua sendo o endereço do cliente");
 });
-test("entregador vê seta e rota, segue GPS e pode arrastar e recentralizar o mapa", async () => {
+test("entregador vê partida, destino e rota completa e pode alternar para seguir GPS", async () => {
     const h=mapHarness("driver"),data={...routeData(),heading:90};
     const pending=h.map.update(data);await settle();h.ready();await pending;
     const marker=h.vehicles[0];
     assert.equal(marker.icon.src,"/images/icons/delivery-arrow.svg");
-    assert.equal(marker.icon.hidden,false);assert.equal(marker.dot.hidden,true);
+    assert.equal(marker.icon.hidden,false);
     assert.equal(marker.icon.style.transform,"rotate(90deg)");
-    assert.equal(h.paths.length,1);assert.equal(h.fits.length,0,"A rota não afasta a câmera da posição atual");
-    assert.equal(h.pans.at(-1).lat,data.latitude);
+    assert.equal(h.paths.length,1);assert.equal(h.fits.length,1,"Enquadra a rota completa ao carregar");
+    assert.ok(h.fits[0].points.some(p=>p.lat===data.rota.origem.latitude && p.lng===data.rota.origem.longitude));
+    assert.ok(h.fits[0].points.some(p=>p.lat===data.rota.destino.latitude && p.lng===data.rota.destino.longitude));
+    assert.equal(h.circles[2].visible,true);
+    assert.equal(h.circles[2].center.lat,data.rota.origem.latitude,"Partida tem seu próprio marcador");
+    assert.equal(h.circles[1].center.lat,data.rota.destino.latitude);
+    assert.equal(h.pans.length,0,"Não centraliza só no entregador na visão completa");
     assert.equal(h.maps[0].options.zoom,17);
     h.maps[0].events.dragstart();
-    await h.map.update({...data,latitude:-23.65});assert.equal(h.pans.length,1,"Respeita o mapa arrastado pelo entregador");
+    await h.map.update({...data,latitude:-23.65});assert.equal(h.pans.length,0,"Respeita o mapa arrastado pelo entregador");
+    assert.equal(h.fits.length,1);
     h.elements.recenterMap.events.click();assert.equal(h.pans.at(-1).lat,-23.65);
     await h.map.update({...data,latitude:-23.64,heading:0});assert.equal(h.pans.at(-1).lat,-23.64);
     assert.equal(marker.icon.style.transform,"rotate(0deg)","Direção norte é válida");
     assert.equal(h.paths.length,1,"Só redesenha a rota quando ela muda");
-    h.map.hide();assert.equal(h.elements.recenterMap.hidden,true);
+    h.elements.showFullRoute.events.click();assert.equal(h.fits.length,2);
+    assert.ok(h.fits.at(-1).points.some(p=>p.lat===-23.64),"A visão completa inclui a posição mais recente");
+    await h.map.update({...data,latitude:-23.63});assert.equal(h.fits.length,2,"Não redefine o zoom a cada GPS dentro do mapa");
+    h.maps[0].inside=false;
+    await h.map.update({...data,latitude:-23.62});assert.equal(h.fits.length,3,"Reenquadra se a seta sair da área visível");
+    h.map.hide();assert.equal(h.elements.recenterMap.hidden,true);assert.equal(h.elements.showFullRoute.hidden,true);
 });
-test("sem direção usa ponto azul; movimento confirmado permite seta sem inventar orientação", async () => {
+test("seta permanece sem direção inicial e conserva a última direção quando parado", async () => {
     const h=mapHarness("driver"),data=routeData();
     const pending=h.map.update(data);await settle();h.ready();await pending;
-    const marker=h.vehicles[0];assert.equal(marker.icon.hidden,true);assert.equal(marker.dot.hidden,false);
+    const marker=h.vehicles[0];assert.equal(marker.icon.hidden,false);
+    assert.equal(marker.icon.style.transform,"rotate(0deg)");
+    assert.match(h.elements.mapStatus.textContent,/Aguardando a primeira direção/);
     await h.map.update({...data,longitude:data.longitude+.001,heading:null});
-    assert.equal(marker.icon.hidden,false);assert.equal(marker.dot.hidden,true);
+    assert.equal(marker.icon.hidden,false);
     assert.ok(Math.abs(Number(marker.icon.style.transform.match(/rotate\((.+)deg\)/)[1])-90)<1);
+    const lastHeading=marker.icon.style.transform;
     await h.map.update({...data,longitude:data.longitude+.001,heading:null});
-    assert.equal(marker.icon.hidden,true);assert.equal(marker.dot.hidden,false,"Parado e sem direção informada mostra ponto azul");
+    assert.equal(marker.icon.hidden,false,"Seta continua aparecendo mesmo parado");
+    assert.equal(marker.icon.style.transform,lastHeading,"Não perde a última direção conhecida");
 });
 test("seta mantém direção quando o Google adiciona o marcador após a primeira posição", async () => {
     const h=mapHarness("driver",true);

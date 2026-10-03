@@ -3,6 +3,7 @@
     const token = location.hash.slice(1), status = document.getElementById("gpsStatus");
     const start = document.getElementById("startGps"), stop = document.getElementById("stopGps"), retryRoute = document.getElementById("refreshRoute");
     const map = window.PetFlowDeliveryMap({ mode: "driver" });
+    const navigation = window.PetFlowDeliveryNavigation({map,recalculate:()=>{if(Date.now()-lastRouteAttempt>=60000) getRoute();}});
     let running = false, pending = false, routePending = false, timer, generation = 0, trip, lastRouteAttempt = 0, wakeLock;
     async function api(path, method = "GET", body) {
         const response = await fetch(`/api/public/entregas/${path}`, { method, headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -13,6 +14,7 @@
     }
     function halt() {
         running = false; generation++; clearInterval(timer); retryRoute.disabled = true;
+        navigation.stop();
         wakeLock?.release().catch(() => {}); wakeLock = null;
     }
     async function keepScreenOn() {
@@ -30,7 +32,7 @@
         try {
             const route = await api("rota", "POST");
             if (!running || current !== generation) return;
-            trip.rota = route; map.update(trip);
+            trip.rota = route; map.update(trip); navigation.update(trip);
             document.getElementById("routeStatus").textContent = "Rota até o endereço da entrega atualizada.";
         } catch (error) {
             if (current !== generation) return;
@@ -48,12 +50,13 @@
             const coords = { latitude: position.coords.latitude, longitude: position.coords.longitude, precisao: position.coords.accuracy };
             await api("localizacao", "POST", coords);
             if (!running || current !== generation) return;
-            trip = { ...trip, ...coords, heading: Number.isFinite(position.coords.heading) ? position.coords.heading : null, precisao_m: coords.precisao, atualizado_em: new Date().toISOString() };
+            trip = { ...trip, ...coords, heading: Number.isFinite(position.coords.heading) ? position.coords.heading : null, velocidade_mps: Number.isFinite(position.coords.speed) && position.coords.speed>=0 ? position.coords.speed : null, precisao_m: coords.precisao, atualizado_em: new Date().toISOString() };
             status.textContent = `Viagem em andamento. GPS enviado às ${new Date().toLocaleTimeString("pt-BR")}. Precisão aproximada: ${Math.round(coords.precisao)} m.`;
-            map.update(trip);
-            if (Date.now() - lastRouteAttempt > (trip.rota?.tipoOrigem === "GPS_ENTREGADOR" ? 300000 : 60000)) getRoute();
+            map.update(trip); navigation.update(trip);
+            if (Date.now() - lastRouteAttempt > (trip.rota?.tipoOrigem === "GPS_ENTREGADOR" && !navigation.needsRoute() ? 300000 : 60000)) getRoute();
         } catch (error) {
             if (current !== generation) return;
+            navigation.pause();
             status.textContent = error.code === 1 ? "Acesso ao GPS negado. Permita a localização nas configurações do navegador e tente iniciar novamente." : `GPS sem atualização: ${error.message || "não foi possível obter a posição"}.`;
             if ([401,410].includes(error.status)) { halt(); start.disabled = stop.disabled = true; map.hide(); }
             else if (error.code === 1) { halt(); start.disabled = false; }
@@ -67,6 +70,7 @@
             trip = await api("viagem");
             if (current !== generation) return;
             running = true; stop.disabled = false; retryRoute.hidden = false;
+            navigation.start();
             map.update({ ...trip, latitude: null, longitude: null });
             status.textContent = "Permita a localização para iniciar a viagem e mostrar o mapa.";
             keepScreenOn(); publish(); timer = setInterval(publish, 5000);
