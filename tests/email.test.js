@@ -13,6 +13,27 @@ test("e-mail de saída inclui botão e URL de rastreamento do pedido", () => {
     assert.ok(template.text.includes(`https://example.com/acompanhar-entrega?pedido=${id}`));
     assert.ok(!template.html.includes("/entregador#"));
 });
+
+test("comprovante do pedido conserva itens, valores, entrega, pagamento e links", () => {
+    const template = email.orderReceivedTemplate({
+        name: "Maria Cliente",
+        orderId: "9c4ecf18-c1b1-45d9-ae3b-7392a2528617",
+        subtotal: 100,
+        discount: 10,
+        shipping: 6,
+        total: 96,
+        paymentMethod: "PIX",
+        address: { endereco: "Rua Teste", numero: "10", cidade: "Santo André", estado: "SP", cep: "09000-000" },
+        items: [{ nome: "Ração", quantidade: 2, valor_unitario: 50 }]
+    });
+    assert.match(template.html, /Ração/);
+    assert.match(template.html, /Rua Teste/);
+    assert.match(template.html, /Pix/);
+    assert.match(template.html, /meus-pedidos/);
+    assert.match(template.html, /termos-de-uso/);
+    assert.match(template.text, /Frete:/);
+    assert.match(template.text, /Total:/);
+});
 afterEach(() => { global.fetch = originalFetch; });
 
 test("Resend recebe remetente, conteúdo e chave de idempotência", async () => {
@@ -64,4 +85,19 @@ test("middleware respeita statusCode dos erros de validação de pedidos", () =>
     assert.equal(status, 400);
     middleware({ statusCode: 999, message: "Erro" }, {}, response);
     assert.equal(status, 500);
+});
+
+test("middleware não expõe detalhes internos em produção", () => {
+    const middleware = require("../middlewares/errorMiddleware");
+    const previous = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    try {
+        let payload;
+        const response = { status() { return this; }, json(value) { payload = value; return value; } };
+        middleware(new Error("senha=segredo SQL interno"), { method: "GET", originalUrl: "/teste" }, response);
+        assert.equal(payload.message, "Erro interno do servidor. Tente novamente em alguns minutos.");
+        assert.doesNotMatch(JSON.stringify(payload), /segredo/);
+    } finally {
+        process.env.NODE_ENV = previous;
+    }
 });

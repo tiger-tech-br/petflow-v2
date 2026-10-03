@@ -20,6 +20,8 @@
 - Crie um produto com foto e confirme o card na loja.
 - Exporte os dados em Minha conta e registre uma solicitacao LGPD.
 - Cancele um pedido de teste pago e confirme o estorno no PagBank antes de testar em pedido real.
+- Na area Meus pedidos, abra uma solicitacao de cancelamento e confirme o protocolo, o sino administrativo e a resposta ao cliente.
+- Simule uma entrega com GPS: nas primeiras 24 horas, confirme cancelamento acima de 1 km do destino e bloqueio quando estiver mais perto; depois de 24 horas, confirme que o sistema abre atendimento sem estorno automatico.
 
 ## Backup e restauracao
 

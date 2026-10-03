@@ -5,6 +5,7 @@ require.cache[require.resolve("../config/env")] = { exports: { APP_URL:"https://
 let sent, sentUrl, sentConfig;
 require("axios").create = () => ({ post:async (url,body,config)=>{sentUrl=url;sent=body;sentConfig=config;return {data:{id:"CHEC_TEST",reference_id:"local-order",links:[{rel:"PAY",href:"https://example.invalid/pay"}]}};} });
 const service = require("../services/pagseguroService");
+const VendaService = require("../services/vendaService");
 test("checkout envia preço, frete, desconto e acréscimo em centavos e preserva endereço", async () => {
     const result = await service.criarCheckout({id:"local-order",acrescimo:2,desconto:1.5,valor_frete:3,
         cliente:{nome:"Cliente Teste",endereco:"Endereço novo"},endereco_entrega:{endereco:"Endereço do pedido",numero:"10",cep:"09000000",cidade:"Santo André",estado:"SP",bairro:"Centro"},
@@ -49,4 +50,15 @@ test("expiração de checkout não cancela pedido pago nem em entrega; cancelame
         await model.atualizarPagamentoPorReferencia("order",{status:"CANCELADA",pagseguroStatus:"EXPIRED",pagseguroResponse:{id}},client);
         assert.equal(values[0],expected);
     }
+});
+
+test("painel administrativo não pode aprovar pagamento sem confirmação do PagBank", async () => {
+    await assert.rejects(
+        VendaService.atualizarStatusPedido(
+            "11111111-1111-4111-8111-111111111111",
+            "22222222-2222-4222-8222-222222222222",
+            "PAGAMENTO_APROVADO"
+        ),
+        error => error?.status === 409 && /PagBank/.test(error.message)
+    );
 });

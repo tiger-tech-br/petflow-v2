@@ -12,8 +12,10 @@ async function produtos(request, response, next) {
                 p.preco,
                 p.foto,
                 p.sku,
+                COALESCE(e.quantidade,0)::int AS estoque_disponivel,
                 c.nome AS categoria
             FROM produtos p
+            LEFT JOIN estoque e ON e.produto_id=p.id AND e.empresa_id=p.empresa_id
             LEFT JOIN categorias c
                 ON c.id = p.categoria_id
             WHERE COALESCE(p.status, p.ativo, TRUE) = TRUE

@@ -206,6 +206,7 @@ function renderProducts(products, options = {}) {
         const inCart = Boolean(publicCart[String(id)]);
         const favorite = publicFavorites.has(String(id));
         const href = `/produtos/${productSlug(product)}`;
+        const available = stockAvailable(product);
 
         return `
             <article class="product-card" data-product-card data-id="${escapeHtml(id)}">
@@ -219,9 +220,9 @@ function renderProducts(products, options = {}) {
                     <div class="product-footer">
                         <strong class="product-price">${currency(product.preco)}</strong>
                         <div class="cart-actions" aria-label="Ações da sacola">
-                            <button class="cart-action add ${inCart ?"is-active" : ""}" type="button" data-action="toggle-cart">
-                                <i class="fa-solid ${inCart ?"fa-check" : "fa-plus"}"></i>
-                                <span>${inCart ?"Na sacola" : "Adicionar à sacola"}</span>
+                            <button class="cart-action add ${inCart ?"is-active" : ""}" type="button" data-action="toggle-cart" ${available <= 0 ? "disabled" : ""}>
+                                <i class="fa-solid ${available <= 0 ? "fa-ban" : inCart ?"fa-check" : "fa-plus"}"></i>
+                                <span>${available <= 0 ? "Esgotado" : inCart ?"Na sacola" : "Adicionar à sacola"}</span>
                             </button>
                             <button class="cart-action favorite ${favorite ?"is-active" : ""}" type="button" data-action="toggle-favorite">
                                 <i class="fa-${favorite ?"solid" : "regular"} fa-heart"></i>
@@ -288,12 +289,16 @@ function syncProductButtons() {
         const favorite = publicFavorites.has(String(id));
         const cartButton = card.querySelector("[data-action='toggle-cart']");
         const favoriteButton = card.querySelector("[data-action='toggle-favorite']");
+        const product = publicProducts.find(item => String(item.id || item.sku || item.nome) === String(id));
+        const available = stockAvailable(product);
 
         if (cartButton) {
+            const unavailable = available <= 0;
+            cartButton.disabled = unavailable;
             cartButton.classList.toggle("is-active", inCart);
             cartButton.innerHTML = `
-                <i class="fa-solid ${inCart ? "fa-check" : "fa-plus"}"></i>
-                <span>${inCart ? "Na sacola" : "Adicionar à sacola"}</span>
+                <i class="fa-solid ${unavailable ? "fa-ban" : inCart ? "fa-check" : "fa-plus"}"></i>
+                <span>${unavailable ? "Esgotado" : inCart ? "Na sacola" : "Adicionar à sacola"}</span>
             `;
         }
 
@@ -401,7 +406,9 @@ function setupFavoritesPanel() {
         }
 
         const addCart = event.target.closest("[data-favorite-add-cart]");
-        if (addCart) {
+        if (addCart && !addCart.disabled) {
+            const product = publicProducts.find(item => String(item.id || item.sku || item.nome) === addCart.dataset.favoriteAddCart);
+            if (stockAvailable(product) <= 0) return;
             publicCart[addCart.dataset.favoriteAddCart] = 1;
             persistPublicState();
             renderProducts(currentVisibleProducts());
@@ -477,6 +484,7 @@ function renderFavoritesItems() {
     list.innerHTML = items.map(product => {
         const id = String(product.id || product.sku || product.nome);
         const inCart = Boolean(publicCart[id]);
+        const available = stockAvailable(product);
 
         return `
             <article class="favorite-item">
@@ -485,9 +493,9 @@ function renderFavoritesItems() {
                     <strong>${escapeHtml(product.nome)}</strong>
                     <span>${currency(product.preco)}</span>
                 </div>
-                <button class="cart-action add ${inCart ? "is-active" : ""}" type="button" data-favorite-add-cart="${escapeHtml(id)}">
-                    <i class="fa-solid ${inCart ? "fa-check" : "fa-plus"}"></i>
-                    <span>${inCart ? "Na sacola" : "Sacola"}</span>
+                <button class="cart-action add ${inCart ? "is-active" : ""}" type="button" data-favorite-add-cart="${escapeHtml(id)}" ${available <= 0 ? "disabled" : ""}>
+                    <i class="fa-solid ${available <= 0 ? "fa-ban" : inCart ? "fa-check" : "fa-plus"}"></i>
+                    <span>${available <= 0 ? "Esgotado" : inCart ? "Na sacola" : "Sacola"}</span>
                 </button>
                 <button class="icon-badge" type="button" data-favorite-remove="${escapeHtml(id)}" aria-label="Remover dos favoritos">
                     <i class="fa-solid fa-trash"></i>
@@ -501,6 +509,11 @@ function getFavoriteProducts() {
     return [...publicFavorites]
         .map(id => publicProducts.find(product => String(product.id || product.sku || product.nome) === String(id)))
         .filter(Boolean);
+}
+
+function stockAvailable(product) {
+    if (!product || product.estoque_disponivel == null) return Number.POSITIVE_INFINITY;
+    return Math.max(0, Number(product.estoque_disponivel) || 0);
 }
 
 function setupCartCheckout() {
@@ -798,6 +811,14 @@ function insertLogoutLink(accountLink) {
 
 function handleCustomerLogout(event) {
     event.preventDefault();
+    const token = sessionStorage.getItem("petflow_customer_token") || localStorage.getItem("petflow_customer_token");
+    if (token) {
+        fetch("/api/public/clientes/logout", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}` },
+            keepalive: true
+        }).catch(() => {});
+    }
     clearCustomerSession();
     closeCustomerNotifications();
     setupCustomerHeader();

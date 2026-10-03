@@ -45,7 +45,7 @@ router.get("/readiness", async (_request, response) => {
     try {
         const { rows } = await db.query(`
             SELECT EXISTS (
-                SELECT 1 FROM schema_migrations WHERE nome = '111_lgpd.sql'
+                SELECT 1 FROM schema_migrations WHERE nome = '112_atendimento_consumidor.sql'
             ) AS latest_migration
         `);
         const databaseReady = rows[0]?.latest_migration === true;

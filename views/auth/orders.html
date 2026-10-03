@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
@@ -35,10 +35,21 @@
 
             <p class="login-note" id="ordersStatus"></p>
         </section>
+        <dialog class="support-dialog" id="orderRequestDialog" aria-labelledby="orderRequestTitle">
+            <form class="auth-form" id="orderRequestForm">
+                <header><div><span class="login-eyebrow">Atendimento eletrônico</span><h2 id="orderRequestTitle">Solicitar atendimento</h2></div><button type="button" class="support-dialog-close" data-close-request aria-label="Fechar">×</button></header>
+                <input type="hidden" name="pedidoId">
+                <div class="form-group"><label for="orderRequestType">Tipo de solicitação</label><select class="form-control" id="orderRequestType" name="tipo" required></select></div>
+                <div class="form-group"><label for="orderRequestReason">Explique o que aconteceu</label><textarea class="form-control" id="orderRequestReason" name="motivo" minlength="5" maxlength="1000" required></textarea></div>
+                <p class="login-note" id="orderRequestRule">Você receberá um protocolo imediatamente e poderá acompanhar a resposta neste pedido.</p>
+                <button class="btn" type="submit">Enviar solicitação</button>
+                <p class="login-note" id="orderRequestStatus" role="status"></p>
+            </form>
+        </dialog>
     </main>
 
-    <script src="/js/layout/public-header.js?v=20260928-1"></script>
-    <script src="/js/pages/auth/public-auth.js?v=20260928-1"></script>
+    <script src="/js/layout/public-header.js?v=20261003-1"></script>
+    <script src="/js/pages/auth/public-auth.js?v=20261003-3"></script>
     <script src="/js/layout/cart-sidebar.js?v=20261001"></script>
 <script src="/js/layout/notifications.js?v=20261002"></script>
 </body>

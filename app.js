@@ -52,6 +52,7 @@ const cupomAdminRoutes = require("./routes/cupomAdminRoutes");
 const usuarioAdminRoutes = require("./routes/usuarioAdminRoutes");
 const auditoriaRoutes = require("./routes/auditoriaRoutes");
 const lgpdAdminRoutes = require("./routes/lgpdAdminRoutes");
+const consumerRequestAdminRoutes = require("./routes/consumerRequestAdminRoutes");
 const healthRoutes = require("./routes/healthRoutes");
 
 const publicCatalogRoutes = require("./routes/publicCatalogRoutes");
@@ -257,6 +258,7 @@ app.use("/api/cupons", cupomAdminRoutes);
 app.use("/api/usuarios-admin", usuarioAdminRoutes);
 app.use("/api/auditoria", auditoriaRoutes);
 app.use("/api/lgpd", lgpdAdminRoutes);
+app.use("/api/atendimento", consumerRequestAdminRoutes);
 
 /* ==========================
    DASHBOARD

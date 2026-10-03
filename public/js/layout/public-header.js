@@ -238,6 +238,14 @@
 
     function handleCustomerLogout(event) {
         event.preventDefault();
+        const token = sessionStorage.getItem("petflow_customer_token") || localStorage.getItem("petflow_customer_token");
+        if (token) {
+            fetch("/api/public/clientes/logout", {
+                method: "POST",
+                headers: { Authorization: `Bearer ${token}` },
+                keepalive: true
+            }).catch(() => {});
+        }
         clearCustomerSession();
         updateHeaderState();
         document.dispatchEvent(new CustomEvent("petflow:customer-logout"));

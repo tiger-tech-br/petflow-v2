@@ -159,6 +159,12 @@ test("cadastro, confirmação, compra, webhook e estoque em PostgreSQL isolado",
         assert.equal(Number(guestOrder.body.data.desconto), 0, "Desconto arbitrário do navegador é ignorado sem cupom");
         assert.equal(Number(guestOrder.body.data.valor_final), 31);
         assert.equal(guestOrder.body.data.endereco_entrega.endereco, deliveryAddress.endereco, "Pedido usa endereço cotado, não outro endereço do perfil");
+        const supportRequest = await request(`/api/public/clientes/pedidos/${guestOrder.body.data.id}/solicitacoes`, "POST",
+            { tipo: "CANCELAMENTO", motivo: "Desisti desta compra antes da entrega." }, token);
+        assert.equal(supportRequest.status, 200, JSON.stringify(supportRequest.body));
+        assert.match(supportRequest.body.data.protocolo, /^ATD-/);
+        assert.equal((await pool.query("SELECT status FROM vendas WHERE id=$1", [guestOrder.body.data.id])).rows[0].status, "CANCELADA");
+        assert.equal((await pool.query("SELECT status FROM solicitacoes_consumidor WHERE venda_id=$1", [guestOrder.body.data.id])).rows[0].status, "ATENDIDA");
         assert.equal((await request("/api/public/frete/cotar", "POST", {})).status, 400);
         await pool.query("UPDATE clientes SET endereco='Rua Alterada' WHERE id=$1", [res.body.data.cliente_id]);
         assert.equal((await request("/api/public/pedidos", "POST", payload, token)).status, 409, "Cotação invalida após mudança de endereço");
@@ -173,7 +179,10 @@ test("cadastro, confirmação, compra, webhook e estoque em PostgreSQL isolado",
         assert.equal((await pool.query("SELECT status FROM vendas WHERE id=$1",[order])).rows[0].status, "PAGAMENTO_APROVADO");
         assert.equal(Number((await pool.query("SELECT quantidade FROM estoque WHERE produto_id=$1",[product])).rows[0].quantidade),8);
         const jwt = require("jsonwebtoken");
-        const adminToken = jwt.sign({ id: adminId, empresaId, cargo: "ADMIN" }, process.env.JWT_SECRET);
+        const adminToken = jwt.sign({ id: adminId, empresaId, cargo: "ADMIN", sv: 1 }, process.env.JWT_SECRET);
+        const supportList = await request("/api/atendimento", "GET", null, adminToken);
+        assert.equal(supportList.status, 200);
+        assert.equal(supportList.body.data[0].protocolo, supportRequest.body.data.protocolo);
         const exported = await request("/api/public/clientes/me/dados", "GET", null, token);
         assert.equal(exported.status, 200);
         assert.equal(exported.body.consentimentos.length, 1, "Exportacao inclui o aceite LGPD");
@@ -196,10 +205,11 @@ test("cadastro, confirmação, compra, webhook e estoque em PostgreSQL isolado",
         assert.ok(notices.every(n => !n.lida));
         assert.equal((await request(noticesPath + "/lidas", "PATCH", { ids: [notices[0].id] }, adminToken)).status, 200);
         assert.equal((await request(noticesPath, "GET", null, adminToken)).body.data.filter(n => n.lida).length, 1, "Leitura persiste ao consultar novamente");
-        const otherAdmin = jwt.sign({ id: crypto.randomUUID(), empresaId, cargo: "ADMIN" }, process.env.JWT_SECRET);
+        const otherAdminId = (await pool.query("INSERT INTO usuarios(nome,email,senha_hash,perfil,empresa_id) VALUES ('Admin 2','admin2@example.invalid','test','ADMIN',$1) RETURNING id", [empresaId])).rows[0].id;
+        const otherAdmin = jwt.sign({ id: otherAdminId, empresaId, cargo: "ADMIN", sv: 1 }, process.env.JWT_SECRET);
         assert.ok((await request(noticesPath, "GET", null, otherAdmin)).body.data.every(n => !n.lida), "Leitura é individual por administrador");
-        const otherStore = jwt.sign({ id: adminId, empresaId: crypto.randomUUID(), cargo: "ADMIN" }, process.env.JWT_SECRET);
-        assert.equal((await request(noticesPath, "GET", null, otherStore)).body.data.length, 0);
+        const otherStore = jwt.sign({ id: adminId, empresaId: crypto.randomUUID(), cargo: "ADMIN", sv: 1 }, process.env.JWT_SECRET);
+        assert.equal((await request(noticesPath, "GET", null, otherStore)).status, 401);
         assert.equal((await request(`/api/vendas/${guestOrder.body.data.id}/status`, "PATCH", { status: "SAIU_PARA_ENTREGA" }, adminToken)).status, 409, "Não envia pedido sem pagamento");
         const linkEndpoint = `/api/vendas/${order}/rastreamento`;
         assert.equal((await request(linkEndpoint)).status,401);
@@ -248,8 +258,8 @@ test("cadastro, confirmação, compra, webhook e estoque em PostgreSQL isolado",
         assert.equal(routeCalls, 1, "Consultas repetidas reaproveitam rota e limitam custo");
         const tracking = `/api/public/pedidos/${order}/rastreamento`;
         assert.equal((await request(tracking)).status, 401);
-        const otherToken = jwt.sign({ id: crypto.randomUUID(), empresaId, type: "customer" }, process.env.JWT_SECRET);
-        assert.equal((await request(tracking, "GET", null, otherToken)).status, 404);
+        const otherToken = jwt.sign({ id: crypto.randomUUID(), empresaId, type: "customer", sv: 1 }, process.env.JWT_SECRET);
+        assert.equal((await request(tracking, "GET", null, otherToken)).status, 401);
         assert.equal((await request(tracking, "GET", null, token)).body.data.latitude, position.latitude);
         assert.equal((await request(tracking, "GET", null, token)).body.data.rota.polyline, "test-route", "Cliente recebe a mesma rota do entregador");
         const adminTracking = await request(linkEndpoint,"GET",null,adminToken);
@@ -257,14 +267,15 @@ test("cadastro, confirmação, compra, webhook e estoque em PostgreSQL isolado",
         assert.deepEqual(adminTracking.body.data,(await request(tracking,"GET",null,token)).body.data,"Administrador e cliente veem o mesmo GPS e rota");
         assert.equal(adminTracking.body.data.token_hash,undefined);
         assert.equal(adminTracking.body.data.token,undefined);
-        const managerToken = jwt.sign({id:adminId,empresaId,cargo:"GERENTE"},process.env.JWT_SECRET);
+        const managerId = (await pool.query("INSERT INTO usuarios(nome,email,senha_hash,perfil,empresa_id) VALUES ('Gerente','gerente@example.invalid','test','GERENTE',$1) RETURNING id", [empresaId])).rows[0].id;
+        const managerToken = jwt.sign({id:managerId,empresaId,cargo:"GERENTE",sv:1},process.env.JWT_SECRET);
         assert.equal((await request(linkEndpoint,"GET",null,managerToken)).status,200);
         assert.equal((await request(gps,"POST",position,driverToken)).status,200,"Consultar no painel não revoga o link do entregador");
         await pool.query("UPDATE entrega_rastreamento SET expira_em=NOW()-INTERVAL '1 minute' WHERE venda_id=$1",[order]);
         const expiredTracking = await request(linkEndpoint,"GET",null,adminToken);
         assert.equal(expiredTracking.body.data.latitude,null,"GPS expirado não aparece no painel");
         assert.equal(expiredTracking.body.data.rota,null);
-        assert.equal((await request("/api/public/clientes/notificacoes", "GET", null, otherToken)).body.data.length, 0, "Outro cliente não vê notificações");
+        assert.equal((await request("/api/public/clientes/notificacoes", "GET", null, otherToken)).status, 401, "Token de cliente inexistente é recusado");
         const replacement = await request(linkEndpoint, "POST", {}, adminToken);
         const replacementToken = new URL(replacement.body.data.url).hash.slice(1);
         assert.equal((await request("/api/public/entregas/viagem", "GET", null, driverToken)).status, 410);

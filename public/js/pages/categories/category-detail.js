@@ -170,6 +170,7 @@ function renderProducts(products, config, query = "") {
         const href = `/produtos/${productSlug(product)}`;
         const inCart = Boolean(readCart()[id]);
         const favorite = publicFavorites.has(id);
+        const available = stockAvailable(product);
 
         return `
             <article class="product-card" data-product-id="${escapeHtml(id)}">
@@ -183,9 +184,9 @@ function renderProducts(products, config, query = "") {
                     <div class="product-footer">
                         <strong class="product-price">${currency(product.preco)}</strong>
                         <div class="product-actions">
-                            <button class="cart-action ${inCart ? "is-active" : ""}" type="button" data-add-cart="${escapeHtml(id)}">
-                                <i class="fa-solid ${inCart ? "fa-check" : "fa-plus"}"></i>
-                                <span>${inCart ? "Na sacola" : "Adicionar à sacola"}</span>
+                            <button class="cart-action ${inCart ? "is-active" : ""}" type="button" data-add-cart="${escapeHtml(id)}" ${available <= 0 ? "disabled" : ""}>
+                                <i class="fa-solid ${available <= 0 ? "fa-ban" : inCart ? "fa-check" : "fa-plus"}"></i>
+                                <span>${available <= 0 ? "Esgotado" : inCart ? "Na sacola" : "Adicionar à sacola"}</span>
                             </button>
                             <button class="cart-action favorite ${favorite ? "is-active" : ""}" type="button" data-favorite-product="${escapeHtml(id)}" aria-label="Favoritar ${escapeHtml(product.nome)}">
                                 <i class="fa-${favorite ? "solid" : "regular"} fa-heart"></i>
@@ -199,6 +200,11 @@ function renderProducts(products, config, query = "") {
     }).join("");
 
     bindCartButtons();
+}
+
+function stockAvailable(product) {
+    if (!product || product.estoque_disponivel == null) return Number.POSITIVE_INFINITY;
+    return Math.max(0, Number(product.estoque_disponivel) || 0);
 }
 
 function renderEmpty(message) {

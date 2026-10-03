@@ -46,6 +46,10 @@ function renderProduct(product) {
     setText("productDescription", product.descricao || "Produto selecionado para cuidar melhor do seu pet.");
     setText("productPrice", currency(product.preco));
     setText("productSku", product.sku || "-");
+    const available = stockAvailable(product);
+    setText("productAvailability", Number.isFinite(available) && available > 0
+        ? `${available} unidade(s) disponível(is)`
+        : available <= 0 ? "Produto esgotado" : "Disponível");
 
     const image = document.getElementById("productImage");
     const button = document.getElementById("addProductToCart");
@@ -56,8 +60,11 @@ function renderProduct(product) {
     }
 
     if (button) {
+        button.disabled = available <= 0;
         button.classList.toggle("is-active", inCart);
-        button.innerHTML = inCart
+        button.innerHTML = available <= 0
+            ? `<i class="fa-solid fa-ban"></i>Produto esgotado`
+            : inCart
             ? `<i class="fa-solid fa-check"></i>Na sacola`
             : `<i class="fa-solid fa-plus"></i>Adicionar à sacola`;
     }
@@ -67,7 +74,7 @@ function setupCartButton() {
     const button = document.getElementById("addProductToCart");
 
     button?.addEventListener("click", () => {
-        if (!currentProduct) {
+        if (!currentProduct || stockAvailable(currentProduct) <= 0) {
             return;
         }
 
@@ -82,6 +89,11 @@ function setupCartButton() {
         window.PetFlowPublicHeader?.update();
         setStatus(document.getElementById("productStatus"), "Produto adicionado à sacola.");
     });
+}
+
+function stockAvailable(product) {
+    if (!product || product.estoque_disponivel == null) return Number.POSITIVE_INFINITY;
+    return Math.max(0, Number(product.estoque_disponivel) || 0);
 }
 
 function productSlug(product) {

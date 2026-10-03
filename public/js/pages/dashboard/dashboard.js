@@ -97,6 +97,12 @@ function bindDashboardActions() {
     });
 
     logout?.addEventListener("click", () => {
+        const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+        if (token) fetch("/api/auth/logout", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}` },
+            keepalive: true
+        }).catch(() => {});
         sessionStorage.removeItem("token");
         sessionStorage.removeItem("user");
         localStorage.removeItem("token");

@@ -29,7 +29,9 @@ async function findByEmail(email) {
 
                 perfil AS cargo,
 
-                ativo AS status
+                ativo AS status,
+
+                sessao_versao
 
             FROM usuarios
 
@@ -68,6 +70,8 @@ async function findById(id) {
                 perfil AS cargo,
 
                 ativo AS status,
+
+                sessao_versao,
 
                 created_at,
 
@@ -148,10 +152,18 @@ async function updatePassword(id, senhaHash) {
                 senha_hash = $1,
                 token_recuperacao = NULL,
                 token_expiracao = NULL,
+                sessao_versao = sessao_versao + 1,
                 updated_at = NOW()
             WHERE id = $2
         `,
         [senhaHash, id]
+    );
+}
+
+async function revokeSessions(id) {
+    await db.query(
+        "UPDATE usuarios SET sessao_versao=sessao_versao+1,updated_at=NOW() WHERE id=$1",
+        [id]
     );
 }
 
@@ -171,6 +183,8 @@ module.exports = {
 
     findByPasswordResetToken,
 
-    updatePassword
+    updatePassword,
+
+    revokeSessions
 
 };

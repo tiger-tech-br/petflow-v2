@@ -14,7 +14,6 @@ const VendaService = require("../services/vendaService");
 const STATUS_PERMITIDOS = Object.freeze([
     "PENDENTE",
     "AGUARDANDO_PAGAMENTO",
-    "PAGAMENTO_APROVADO",
     "EM_SEPARACAO",
     "SAIU_PARA_ENTREGA",
     "ENTREGUE",

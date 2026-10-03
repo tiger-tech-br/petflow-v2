@@ -2,6 +2,7 @@ const app = require("./app");
 
 const { PORT } = require("./config/env");
 const { assertEmailConfigured } = require("./services/emailService");
+const VendaService = require("./services/vendaService");
 if (!process.env.GOOGLE_MAPS_API_KEY?.trim() && !process.env.GOOGLE_API_KEY?.trim()) {
     console.warn("[frete] Configure GOOGLE_MAPS_API_KEY ou GOOGLE_API_KEY com Routes API habilitada para liberar novas compras com entrega.");
 }
@@ -17,3 +18,10 @@ app.listen(PORT, "0.0.0.0", () => {
     console.log(`PetFlow rodando na porta ${PORT}.`);
 
 });
+
+const reservationCleanup = setInterval(() => {
+    VendaService.liberarReservasExpiradas().catch(error => {
+        console.error("[estoque] Falha ao liberar reservas expiradas.", { code: error.code || "UNKNOWN" });
+    });
+}, 60 * 1000);
+reservationCleanup.unref();

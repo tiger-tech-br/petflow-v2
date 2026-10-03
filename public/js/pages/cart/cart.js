@@ -117,7 +117,10 @@ function setupCartEvents() {
             return;
         }
 
-        cart[input.dataset.cartQuantity] = Math.min(999, Math.max(1, Math.floor(Number(input.value) || 1)));
+        const product = cartProducts.find(item => getProductId(item) === input.dataset.cartQuantity);
+        const available = stockAvailable(product);
+        const maximum = Number.isFinite(available) ? Math.max(1, available) : 999;
+        cart[input.dataset.cartQuantity] = Math.min(maximum, Math.max(1, Math.floor(Number(input.value) || 1)));
         persistCart();
         renderCart();
         refreshCoupons();
@@ -156,6 +159,9 @@ function renderCart() {
 
     list.innerHTML = items.map(({ product, quantity }) => {
         const id = getProductId(product);
+        const available = stockAvailable(product);
+        const unavailable = available <= 0;
+        const exceedsStock = Number.isFinite(available) && quantity > available;
 
         return `
             <article class="cart-item">
@@ -163,8 +169,9 @@ function renderCart() {
                 <div>
                     <strong>${escapeHtml(product.nome)}</strong>
                     <span>${currency(product.preco)}</span>
+                    ${unavailable ? '<small class="stock-message">Produto esgotado. Remova-o para continuar.</small>' : exceedsStock ? `<small class="stock-message">Somente ${available} unidade(s) disponível(is).</small>` : ""}
                 </div>
-                <input class="form-control" type="number" min="1" step="1" value="${quantity}" data-cart-quantity="${escapeHtml(id)}" aria-label="Quantidade">
+                <input class="form-control" type="number" min="1" ${Number.isFinite(available) && available > 0 ? `max="${available}"` : ""} step="1" value="${quantity}" data-cart-quantity="${escapeHtml(id)}" aria-label="Quantidade" ${unavailable ? "disabled" : ""}>
                 <button class="remove-button" type="button" data-cart-remove="${escapeHtml(id)}" aria-label="Remover item">
                     <i class="fa-solid fa-trash"></i>
                 </button>
@@ -181,6 +188,13 @@ function renderTotals() {
     const productsTotal = couponSubtotal ?? getCartTotal(items);
     const discount = appliedCoupon?.desconto || 0;
     const subtotal = Math.round((productsTotal - discount) * 100) / 100;
+    const invalidStock = items.some(({ product, quantity }) => {
+        const available = stockAvailable(product);
+        return available <= 0 || (Number.isFinite(available) && quantity > available);
+    });
+    const stockStatus = document.getElementById("cartStockStatus");
+    stockStatus.hidden = !invalidStock;
+    stockStatus.textContent = invalidStock ? "Ajuste ou remova os itens sem estoque antes de comprar." : "";
     document.getElementById("cartProductsTotal").textContent = currency(productsTotal);
     document.getElementById("cartDiscount").textContent = discount ? `-${currency(discount)}` : currency(0);
     document.getElementById("cartItemCount").textContent = items.reduce((sum, item) => sum + item.quantity, 0);
@@ -195,9 +209,13 @@ function renderTotals() {
     document.getElementById("cartDeliveryPrompt").hidden = Boolean(shippingQuote);
     document.getElementById("cartShipping").textContent = shippingQuote ? (shippingQuote.valor === 0 ? "Grátis" : currency(shippingQuote.valor)) : "";
     document.getElementById("cartTotal").textContent = shippingQuote ? currency(subtotal + shippingQuote.valor) : "";
-    document.querySelector("#cartForm button[type='submit']").disabled = submitting || couponLoading || !shippingQuote || !items.length;
+    document.querySelector("#cartForm button[type='submit']").disabled = submitting || couponLoading || invalidStock || !shippingQuote || !items.length;
     document.querySelector("#cartForm button[type='submit']").textContent = submitting ? "Criando pedido..." : (getToken() ? "Comprar" : "Entrar para comprar");
-    document.querySelectorAll("[data-cart-quantity], [data-cart-remove], #applyCoupon, #removeCoupon, [data-coupon-code]").forEach(el => { el.disabled = submitting; });
+    document.querySelectorAll("[data-cart-quantity]").forEach(el => {
+        const product = cartProducts.find(item => getProductId(item) === el.dataset.cartQuantity);
+        el.disabled = submitting || stockAvailable(product) <= 0;
+    });
+    document.querySelectorAll("[data-cart-remove], #applyCoupon, #removeCoupon, [data-coupon-code]").forEach(el => { el.disabled = submitting; });
     document.querySelectorAll("#shippingForm input, #lookupCep").forEach(el => { el.disabled = submitting; });
 }
 
@@ -470,6 +488,16 @@ async function submitOrder(event) {
         return;
     }
 
+    const invalidStock = items.find(({ product, quantity }) => {
+        const available = stockAvailable(product);
+        return available <= 0 || (Number.isFinite(available) && quantity > available);
+    });
+    if (invalidStock) {
+        setStatus(status, `O estoque de ${invalidStock.product.nome} mudou. Ajuste a sacola antes de finalizar.`);
+        renderCart();
+        return;
+    }
+
     if (!token) {
         window.top.location.href = "/login";
         return;
@@ -630,6 +658,11 @@ function getCartTotal(items) {
 
 function getProductId(product) {
     return String(product.id || product.sku || product.nome);
+}
+
+function stockAvailable(product) {
+    if (!product || product.estoque_disponivel == null) return Number.POSITIVE_INFINITY;
+    return Math.max(0, Math.floor(Number(product.estoque_disponivel) || 0));
 }
 
 function readCart() {

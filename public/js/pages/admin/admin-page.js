@@ -135,6 +135,7 @@
             ["cupons", "/admin/pages/cupons/cupons.html", "fa-ticket", "Cupons"],
             ["usuarios", "/admin/pages/usuarios/usuarios.html", "fa-user-shield", "Usuários"],
             ["auditoria", "/admin/pages/auditoria/auditoria.html", "fa-clock-rotate-left", "Auditoria"]
+            ,["atendimento", "/admin/pages/atendimento/atendimento.html", "fa-headset", "Atendimento"]
             ,["lgpd", "/admin/pages/lgpd/lgpd.html", "fa-shield-halved", "LGPD"]
         ];
         for (const [key, href, icon, label] of links) {
@@ -162,6 +163,12 @@
     function setupAdminLogout() {
         document.querySelectorAll('a[href="/admin/index.html"]').forEach(link => {
             link.addEventListener("click", () => {
+                const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+                if (token) fetch("/api/auth/logout", {
+                    method: "POST",
+                    headers: { Authorization: `Bearer ${token}` },
+                    keepalive: true
+                }).catch(() => {});
                 sessionStorage.removeItem("token");
                 sessionStorage.removeItem("user");
                 localStorage.removeItem("token");
@@ -715,7 +722,8 @@
     }
 
     async function deleteRecord(id) {
-        if (!id || !confirm("Deseja remover este registro?")) {
+        const confirmation = config.deleteConfirmation || "Deseja remover este registro?";
+        if (!id || !confirm(confirmation)) {
             return;
         }
 
@@ -925,7 +933,7 @@
         );
 
         const columns = config.columns || [];
-        const showActions = config.mode !== "single" && !isReadOnlyPage &&
+        const showActions = config.mode !== "single" && (!isReadOnlyPage || config.allowDelete === true) &&
             (config.allowEdit !== false || config.allowDelete !== false || config.key === "compras");
         const filtered = records.filter(record =>
             normalizeSearch(JSON.stringify(record)).includes(search)
@@ -1128,7 +1136,7 @@
                 type="button"
                 data-action="delete"
                 data-id="${escapeHtml(id)}"
-                title="Excluir">
+                title="${escapeHtml(config.deleteLabel || "Excluir")}">
                 <i class="fa-solid fa-trash"></i>
             </button>`}
         `;
@@ -1175,7 +1183,13 @@
         const search = normalizeSearch(document.getElementById("pageSearch")?.value || "");
         const list = records.filter(record => normalizeSearch(JSON.stringify(record)).includes(search));
         const columns = config.columns || [];
-        const quote = value => `"${String(value ?? "").replaceAll('"', '""')}"`;
+        const quote = value => {
+            const text = String(value ?? "");
+            const spreadsheetSafe = /^\s*[=+\-@]/.test(text) || /^[\t\r\n]/.test(text)
+                ? `'${text}`
+                : text;
+            return `"${spreadsheetSafe.replaceAll('"', '""')}"`;
+        };
         const rows = [columns.map(column => quote(column.label)).join(";")];
         for (const record of list) {
             rows.push(columns.map(column => quote(getRecordValue(record, column.key, ""))).join(";"));
@@ -1459,7 +1473,7 @@
 
     function buildSaleStatusOptions(currentStatus) {
         const allowed = {
-            AGUARDANDO_PAGAMENTO: ["PAGAMENTO_APROVADO","CANCELADA"],
+            AGUARDANDO_PAGAMENTO: ["CANCELADA"],
             PAGAMENTO_APROVADO: ["EM_SEPARACAO","SAIU_PARA_ENTREGA","CANCELADA"],
             EM_SEPARACAO: ["SAIU_PARA_ENTREGA","CANCELADA"],
             SAIU_PARA_ENTREGA: ["ENTREGUE","CANCELADA"],
@@ -1861,7 +1875,11 @@
             lgpd_open: String(records.filter(record => ["ABERTA", "EM_ANALISE"].includes(record.status)).length),
             lgpd_due: String(records.filter(record => ["ABERTA", "EM_ANALISE"].includes(record.status) &&
                 record.prazo_em && new Date(record.prazo_em).getTime() <= Date.now() + 3 * 86400000).length),
-            lgpd_done: String(records.filter(record => record.status === "ATENDIDA").length)
+            lgpd_done: String(records.filter(record => record.status === "ATENDIDA").length),
+            support_open: String(records.filter(record => ["RECEBIDA", "EM_ANALISE"].includes(record.status)).length),
+            support_due: String(records.filter(record => ["RECEBIDA", "EM_ANALISE"].includes(record.status) &&
+                record.prazo_em && new Date(record.prazo_em).getTime() <= today.getTime() + 86400000).length),
+            support_done: String(records.filter(record => ["ATENDIDA", "NEGADA"].includes(record.status)).length)
         };
 
         document.querySelectorAll("[data-insight-key]").forEach(card => {

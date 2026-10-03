@@ -27,19 +27,22 @@ async function main() {
             SELECT to_regclass('public.schema_migrations') IS NOT NULL AS migrations,
                    to_regclass('public.auditoria_admin') IS NOT NULL AS auditoria,
                    to_regclass('public.reservas_estoque') IS NOT NULL AS reservas,
-                   to_regclass('public.lgpd_solicitacoes') IS NOT NULL AS lgpd
+                   to_regclass('public.lgpd_solicitacoes') IS NOT NULL AS lgpd,
+                   to_regclass('public.solicitacoes_consumidor') IS NOT NULL AS atendimento
         `);
         check("Conexao PostgreSQL", true, "conectado");
         check("Controle de migracoes", tables[0].migrations, "schema_migrations");
         check("Auditoria administrativa", tables[0].auditoria, "auditoria_admin");
         check("Reserva de estoque", tables[0].reservas, "reservas_estoque");
         check("Estrutura LGPD", tables[0].lgpd, "lgpd_solicitacoes");
+        check("Atendimento ao consumidor", tables[0].atendimento, "solicitacoes_consumidor");
 
         if (tables[0].migrations) {
-            const { rows } = await db.query("SELECT nome FROM schema_migrations WHERE nome IN ('110_admin_profissional.sql','111_lgpd.sql')");
+            const { rows } = await db.query("SELECT nome FROM schema_migrations WHERE nome IN ('110_admin_profissional.sql','111_lgpd.sql','112_atendimento_consumidor.sql')");
             const applied = new Set(rows.map(row => row.nome));
             check("Migracao administrativa", applied.has("110_admin_profissional.sql"), "110_admin_profissional.sql");
             check("Migracao LGPD", applied.has("111_lgpd.sql"), "111_lgpd.sql");
+            check("Migracao de atendimento", applied.has("112_atendimento_consumidor.sql"), "112_atendimento_consumidor.sql");
         }
         const { rows: catalog } = await db.query(`
             SELECT

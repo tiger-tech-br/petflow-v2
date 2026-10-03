@@ -226,6 +226,12 @@ async function criarPedido(request, response, next) {
                 pedido.venda.valor_final ??
                 pedido.venda.valor_total,
 
+            subtotal: pedido.venda.valor_total,
+            discount: pedido.venda.desconto,
+            shipping: pedido.venda.valor_frete,
+            paymentMethod: pedido.venda.forma_pagamento,
+            address: pedido.venda.endereco_entrega,
+
             items: itensDetalhados
         });
 

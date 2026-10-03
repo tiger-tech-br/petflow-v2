@@ -50,7 +50,8 @@ async function login(request, response, next) {
             nome: usuario.nome,
             email: usuario.email,
             cargo: usuario.cargo,
-            perfil: usuario.cargo
+            perfil: usuario.cargo,
+            sv: Number(usuario.sessao_versao)
         };
 
         const token = jwt.sign(
@@ -87,6 +88,7 @@ async function me(request, response, next) {
 
 async function logout(request, response, next) {
     try {
+        await authModel.revokeSessions(request.user.id);
         return response.status(200).json({
             success: true,
             message: "Logout realizado com sucesso."

@@ -310,14 +310,16 @@ async function setupPublicOrders() {
     const status = document.getElementById("ordersStatus");
 
     list.addEventListener("click", event => {
-        const button = event.target.closest("[data-continue-payment]");
-
-        if (!button) {
+        const paymentButton = event.target.closest("[data-continue-payment]");
+        if (paymentButton) {
+            window.location.href = paymentButton.dataset.continuePayment;
             return;
         }
-
-        window.location.href = button.dataset.continuePayment;
+        const requestButton = event.target.closest("[data-request-order]");
+        if (requestButton) openOrderRequestDialog(requestButton.dataset.requestOrder, requestButton.dataset.orderStatus,
+            requestButton.dataset.cancelAvailable === "true", requestButton.dataset.cancelMessage || "");
     });
+    setupOrderRequestForm();
 
     try {
         const payload = await request("/clientes/pedidos", "GET");
@@ -388,9 +390,78 @@ function renderOrders(list, orders) {
                 <p>Frete: ${currency(order.valor_frete || 0)}</p>
                 ${order.status === "SAIU_PARA_ENTREGA" ? `<a class="btn-secondary" href="/acompanhar-entrega?pedido=${encodeURIComponent(order.id)}">Rastrear pedido</a>` : ""}
                 ${renderContinuePayment(order)}
+                ${renderConsumerRequest(order)}
             </article>
         `;
     }).join("");
+}
+
+function renderConsumerRequest(order) {
+    const item = order.solicitacao;
+    if (item) {
+        return `<section class="order-support-status"><strong>Atendimento ${escapeHtml(item.protocolo)}</strong>
+            <span>${escapeHtml(formatSupportStatus(item.status))}</span>
+            <p>${escapeHtml(item.resposta || "Sua solicitação foi recebida e está sendo analisada pela loja.")}</p></section>`;
+    }
+    if (order.status === "CANCELADA") {
+        return `<div class="order-actions order-support-action"><button class="btn-secondary" type="button"
+            data-request-order="${escapeHtml(order.id)}" data-order-status="${escapeHtml(order.status)}"
+            data-cancel-available="false" data-cancel-message="O pedido está cancelado. Você ainda pode falar com a loja.">
+            <i class="fa-solid fa-headset"></i>Solicitar atendimento</button></div>`;
+    }
+    const delivered = ["ENTREGUE", "FINALIZADA"].includes(order.status);
+    const canCancel = order.cancelamento_disponivel === true;
+    return `<div class="order-actions order-support-action"><button class="btn-secondary" type="button"
+        data-request-order="${escapeHtml(order.id)}" data-order-status="${escapeHtml(order.status)}"
+        data-cancel-available="${canCancel}" data-cancel-message="${escapeHtml(order.cancelamento_mensagem || "")}">
+        <i class="fa-solid fa-headset"></i>${delivered ? "Solicitar devolução" : canCancel ? "Cancelar ou pedir ajuda" : "Solicitar atendimento"}</button>
+        <span>${escapeHtml(order.cancelamento_mensagem || "Cancelamento, arrependimento, devolução ou reclamação.")}</span></div>`;
+}
+
+function setupOrderRequestForm() {
+    const dialog = document.getElementById("orderRequestDialog");
+    const form = document.getElementById("orderRequestForm");
+    if (!dialog || !form || form.dataset.ready) return;
+    form.dataset.ready = "true";
+    dialog.querySelector("[data-close-request]")?.addEventListener("click", () => dialog.close());
+    form.addEventListener("submit", async event => {
+        event.preventDefault();
+        const status = document.getElementById("orderRequestStatus");
+        setStatus(status, "Enviando solicitação...");
+        try {
+            const id = form.elements.pedidoId.value;
+            const payload = await request(`/clientes/pedidos/${encodeURIComponent(id)}/solicitacoes`, "POST", {
+                tipo: form.elements.tipo.value,
+                motivo: form.elements.motivo.value
+            });
+            setStatus(status, `${payload.message} Protocolo: ${payload.data.protocolo}.`);
+            setTimeout(() => window.location.reload(), 900);
+        } catch (error) { setStatus(status, error.message || "Não foi possível enviar a solicitação."); }
+    });
+}
+
+function openOrderRequestDialog(orderId, orderStatus, canCancel, cancellationMessage) {
+    const dialog = document.getElementById("orderRequestDialog");
+    const form = document.getElementById("orderRequestForm");
+    if (!dialog || !form) return;
+    const delivered = ["ENTREGUE", "FINALIZADA"].includes(orderStatus);
+    form.reset();
+    form.elements.pedidoId.value = orderId;
+    form.elements.tipo.innerHTML = orderStatus === "CANCELADA"
+        ? '<option value="RECLAMACAO">Reclamação ou dúvida</option>'
+        : delivered
+        ? '<option value="ARREPENDIMENTO">Direito de arrependimento</option><option value="DEVOLUCAO">Devolução ou produto com problema</option><option value="RECLAMACAO">Reclamação ou dúvida</option>'
+        : canCancel
+            ? '<option value="CANCELAMENTO">Cancelar pedido</option><option value="ARREPENDIMENTO">Direito de arrependimento</option><option value="RECLAMACAO">Reclamação ou dúvida</option>'
+            : '<option value="ARREPENDIMENTO">Direito de arrependimento</option><option value="RECLAMACAO">Reclamação ou dúvida</option>';
+    const rule = document.getElementById("orderRequestRule");
+    if (rule) rule.textContent = cancellationMessage || "Você receberá um protocolo imediatamente e poderá acompanhar a resposta neste pedido.";
+    setStatus(document.getElementById("orderRequestStatus"), "");
+    dialog.showModal();
+}
+
+function formatSupportStatus(status) {
+    return ({ RECEBIDA: "Recebida", EM_ANALISE: "Em análise", ATENDIDA: "Atendida", NEGADA: "Encerrada" })[status] || status;
 }
 
 function renderOrderNotes(order) {

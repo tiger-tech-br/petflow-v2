@@ -65,6 +65,15 @@ const VendaService = {
             );
         }
 
+        if (itens.length > 50) {
+            throw Object.assign(new Error("O pedido pode conter no máximo 50 produtos diferentes."), { status: 400 });
+        }
+
+        const quantidadeTotal = itens.reduce((total, item) => total + Number(item?.quantidade || 0), 0);
+        if (!Number.isFinite(quantidadeTotal) || quantidadeTotal > 500) {
+            throw Object.assign(new Error("A quantidade total do pedido excede o limite permitido."), { status: 400 });
+        }
+
         const formaPagamento =
             venda.forma_pagamento ??
             venda.formaPagamento ??
@@ -153,6 +162,10 @@ const VendaService = {
                 const quantidade = Number(
                     item.quantidade
                 );
+
+                if (!Number.isInteger(quantidade) || quantidade < 1 || quantidade > 100) {
+                    throw Object.assign(new Error("A quantidade de cada produto deve estar entre 1 e 100."), { status: 400 });
+                }
 
                 if (!produtoId) {
                     throw new Error(
@@ -462,10 +475,7 @@ const VendaService = {
     async atualizarStatusPedido(empresaId, vendaId, status, options = {}) {
 
         if (status === "PAGAMENTO_APROVADO") {
-            return this.confirmarPagamento(
-                empresaId,
-                vendaId
-            );
+            throw Object.assign(new Error("O pagamento só pode ser aprovado após confirmação do PagBank."), { status: 409 });
         }
 
         if (status === "CANCELADA") {
@@ -612,7 +622,6 @@ async function liberarReservasExpiradas(empresaId) {
         const { rows: vendas } = await client.query(
             `SELECT v.* FROM vendas v
              WHERE v.empresa_id=$1 AND v.status='AGUARDANDO_PAGAMENTO'
-               AND v.pagseguro_checkout_id IS NULL
                AND v.reserva_expira_em IS NOT NULL AND v.reserva_expira_em<=NOW()
              FOR UPDATE SKIP LOCKED`,
             [empresaId]
@@ -638,6 +647,18 @@ async function liberarReservasExpiradas(empresaId) {
             );
         }
     });
+}
+
+async function liberarTodasReservasExpiradas() {
+    const { rows } = await db.query(
+        `SELECT DISTINCT empresa_id FROM vendas
+         WHERE status='AGUARDANDO_PAGAMENTO'
+           AND reserva_expira_em IS NOT NULL AND reserva_expira_em<=NOW()`
+    );
+    for (const row of rows) {
+        await liberarReservasExpiradas(row.empresa_id);
+    }
+    return rows.length;
 }
 
 async function buscarVendaPagamento(referencia, empresaId, client) {
@@ -765,5 +786,7 @@ async function enviarEmailStatusPedido(venda, status) {
     });
 
 }
+
+VendaService.liberarReservasExpiradas = liberarTodasReservasExpiradas;
 
 module.exports = VendaService;

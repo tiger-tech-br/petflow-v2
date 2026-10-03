@@ -54,6 +54,15 @@ test("resumo mostra desconto separado, subtotal, frete, total e remoção", asyn
     assert.equal(h.get("cartSavings").hidden, true);
 });
 
+test("sacola bloqueia compra quando o produto está esgotado", () => {
+    const h = cartHarness(async () => response(""));
+    h.run("cartProducts[0].estoque_disponivel=0; renderCart()");
+    assert.equal(h.get("buy").disabled, true);
+    assert.equal(h.get("cartStockStatus").hidden, false);
+    assert.match(h.get("cartStockStatus").textContent, /sem estoque/);
+    assert.match(h.get("cartItems").innerHTML, /Produto esgotado/);
+});
+
 test("resposta atrasada não reaplica cupom removido durante a consulta", async () => {
     let resolveFirst;
     let calls = 0;

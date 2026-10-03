@@ -27,6 +27,8 @@ async function criar(data, empresaId, senhaHash, client = db) {
 async function atualizar(id, data, empresaId, senhaHash, client = db) {
     const { rows } = await client.query(
         `UPDATE usuarios SET nome=$1,email=LOWER($2),perfil=$3,ativo=$4,
+         sessao_versao=sessao_versao + CASE
+            WHEN perfil IS DISTINCT FROM $3 OR ativo IS DISTINCT FROM $4 OR $5::text IS NOT NULL THEN 1 ELSE 0 END,
          senha_hash=COALESCE($5,senha_hash),updated_at=NOW()
          WHERE id=$6 AND empresa_id=$7
          RETURNING id,nome,email,perfil,ativo,ultimo_login,created_at,updated_at`,

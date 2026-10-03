@@ -131,9 +131,13 @@ function passwordResetTemplate({ name, resetUrl }) {
 
 
 
-function orderReceivedTemplate({ name, orderId, total, items = [] }) {
+function orderReceivedTemplate({ name, orderId, total, subtotal, discount, shipping, paymentMethod, address, items = [] }) {
     const safeName = escapeHtml(firstName(name) || "cliente");
     const orderLabel = shortId(orderId);
+    const addressText = formatAddress(address);
+    const paymentText = formatPayment(paymentMethod);
+    const ordersUrl = `${APP_URL}/meus-pedidos`;
+    const termsUrl = `${APP_URL}/termos-de-uso`;
     const itemList = items.map(item => `
         <li style="padding:10px 0;border-bottom:1px solid #e5edf0">
             ${escapeHtml(item.nome || "Produto")}
@@ -143,7 +147,7 @@ function orderReceivedTemplate({ name, orderId, total, items = [] }) {
 
     return {
         subject: `Pedido recebido #${orderLabel} - PetFlow`,
-        text: `Olá, ${safeName}. Recebemos seu pedido #${orderLabel} no valor de ${currency(total)}.`,
+        text: `Olá, ${firstName(name) || "cliente"}. Recebemos seu pedido #${orderLabel}. Produtos: ${currency(subtotal ?? total)}. Desconto: ${currency(discount)}. Frete: ${currency(shipping)}. Total: ${currency(total)}. Pagamento: ${paymentText}. Entrega: ${addressText}. Consulte e solicite atendimento em ${ordersUrl}. Termos: ${termsUrl}.`,
         html: baseEmail(`
             <h1>Pedido recebido</h1>
             <p>Olá, ${safeName}.</p>
@@ -151,7 +155,16 @@ function orderReceivedTemplate({ name, orderId, total, items = [] }) {
             <ul style="list-style:none;padding:0;margin:18px 0;color:#10212b">
                 ${itemList}
             </ul>
-            <p style="font-size:18px"><strong>Total: ${currency(total)}</strong></p>
+            <table style="width:100%;border-collapse:collapse;margin:18px 0">
+                <tr><td style="padding:5px 0">Produtos</td><td style="padding:5px 0;text-align:right">${currency(subtotal ?? total)}</td></tr>
+                <tr><td style="padding:5px 0">Desconto</td><td style="padding:5px 0;text-align:right">-${currency(discount)}</td></tr>
+                <tr><td style="padding:5px 0">Frete</td><td style="padding:5px 0;text-align:right">${currency(shipping)}</td></tr>
+                <tr><td style="padding:10px 0;border-top:1px solid #d9e5e7;font-size:18px"><strong>Total</strong></td><td style="padding:10px 0;border-top:1px solid #d9e5e7;text-align:right;font-size:18px"><strong>${currency(total)}</strong></td></tr>
+            </table>
+            <p><strong>Pagamento:</strong> ${escapeHtml(paymentText)}</p>
+            <p><strong>Endereço de entrega:</strong> ${escapeHtml(addressText)}</p>
+            <p><a href="${escapeHtml(ordersUrl)}" style="display:inline-block;background:#04766d;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:700">Consultar pedido e atendimento</a></p>
+            <p style="font-size:13px;color:#647481">Guarde este e-mail como comprovante. Consulte também os <a href="${escapeHtml(termsUrl)}">Termos de Uso</a>.</p>
         `)
     };
 }
@@ -260,6 +273,16 @@ function currency(value) {
         style: "currency",
         currency: "BRL"
     });
+}
+
+function formatAddress(value) {
+    if (!value || typeof value !== "object") return "Endereço informado no pedido";
+    return [value.endereco, value.numero, value.complemento, value.bairro, value.cidade,
+        value.estado, value.cep].filter(Boolean).join(", ") || "Endereço informado no pedido";
+}
+
+function formatPayment(value) {
+    return ({ PIX: "Pix", CARTAO_CREDITO: "Cartão de crédito", CARTAO_DEBITO: "Cartão de débito", PAGBANK: "PagBank" })[value] || String(value || "PagBank");
 }
 
 

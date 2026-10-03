@@ -4,6 +4,8 @@ const bcrypt = require("bcrypt");
 const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
 const db = require("../database/connection");
+const VendaService = require("../services/vendaService");
+const { avaliarCancelamento } = require("../services/cancelamentoEntregaService");
 const PRIVACY_VERSION = "2026-10-03";
 
 function digest(value) {
@@ -17,6 +19,7 @@ const {
 
 const {
     sendEmail,
+    sendOptionalEmail,
     assertEmailConfigured,
     emailVerificationTemplate,
     passwordResetTemplate
@@ -366,6 +369,7 @@ async function login(request, response, next) {
                     c.*,
                     uc.senha_hash,
                     uc.email_verificado,
+                    uc.sessao_versao,
                     uc.ativo AS usuario_ativo
                 FROM clientes c
                 INNER JOIN usuarios_clientes uc
@@ -439,6 +443,21 @@ async function login(request, response, next) {
 
     }
 
+}
+
+async function logout(request, response, next) {
+    try {
+        const customer = getAuthenticatedCustomer(request, response);
+        if (!customer) return;
+        await db.query(
+            `UPDATE usuarios_clientes SET sessao_versao=sessao_versao+1,updated_at=NOW()
+             WHERE cliente_id=$1`,
+            [customer.id]
+        );
+        return response.json({ success: true, message: "Sessão encerrada com sucesso." });
+    } catch (error) {
+        return next(error);
+    }
 }
 
 async function forgotPassword(request, response, next) {
@@ -693,6 +712,7 @@ async function resetPassword(request, response, next) {
                     senha_hash = $1,
                     token_recuperacao = NULL,
                     token_expiracao = NULL,
+                    sessao_versao = sessao_versao + 1,
                     updated_at = NOW()
                 WHERE cliente_id = $2
             `,
@@ -984,7 +1004,7 @@ async function exportData(request, response, next) {
     try {
         const customer = getAuthenticatedCustomer(request, response);
         if (!customer) return;
-        const [profile, ordersResult, notices, consents, requests] = await Promise.all([
+        const [profile, ordersResult, notices, consents, requests, consumerRequests] = await Promise.all([
             getProfileById(customer.id, customer.empresaId),
             db.query(`SELECT id,data_venda,valor_total,desconto,valor_frete,valor_final,forma_pagamento,
                       status,endereco_entrega,observacoes,cupom_codigo,created_at,updated_at
@@ -997,13 +1017,17 @@ async function exportData(request, response, next) {
                 [customer.empresaId, customer.id]),
             db.query(`SELECT protocolo,tipo,status,detalhes,resposta,solicitada_em,prazo_em,atendida_em
                       FROM lgpd_solicitacoes WHERE empresa_id=$1 AND cliente_id=$2 ORDER BY solicitada_em DESC`,
+                [customer.empresaId, customer.id]),
+            db.query(`SELECT protocolo,venda_id,tipo,status,motivo,resposta,solicitada_em,prazo_em,atendida_em
+                      FROM solicitacoes_consumidor WHERE empresa_id=$1 AND cliente_id=$2 ORDER BY solicitada_em DESC`,
                 [customer.empresaId, customer.id])
         ]);
         response.set("Cache-Control", "no-store");
         response.set("Content-Disposition", `attachment; filename="petflow-meus-dados-${new Date().toISOString().slice(0,10)}.json"`);
         return response.json({ geradoEm: new Date().toISOString(), titular: profile,
             pedidos: ordersResult.rows, notificacoes: notices.rows,
-            consentimentos: consents.rows, solicitacoes: requests.rows });
+            consentimentos: consents.rows, solicitacoes: requests.rows,
+            solicitacoesAtendimento: consumerRequests.rows });
     } catch (error) { return next(error); }
 }
 
@@ -1059,6 +1083,134 @@ async function listLgpdRequests(request, response, next) {
 
 function buildLgpdProtocol() {
     return `LGPD-${new Date().toISOString().slice(0,10).replaceAll("-","")}-${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
+}
+
+async function createConsumerRequest(request, response, next) {
+    try {
+        const customer = getAuthenticatedCustomer(request, response);
+        if (!customer) return;
+        const vendaId = String(request.params.id || "");
+        if (!/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(vendaId)) {
+            return response.status(400).json({ success: false, message: "Pedido inválido." });
+        }
+        const tipo = String(request.body?.tipo || "").toUpperCase();
+        if (!["CANCELAMENTO", "ARREPENDIMENTO", "DEVOLUCAO", "RECLAMACAO"].includes(tipo)) {
+            return response.status(400).json({ success: false, message: "Tipo de solicitação inválido." });
+        }
+        const motivo = String(request.body?.motivo || "").trim().slice(0, 1000);
+        if (motivo.length < 5) {
+            return response.status(400).json({ success: false, message: "Explique o motivo da solicitação." });
+        }
+
+        const { rows } = await db.query(
+            `SELECT v.*,c.nome AS cliente_nome,c.email AS cliente_email,
+                    r.latitude,r.longitude,r.precisao_m,r.atualizado_em,r.rota
+             FROM vendas v JOIN clientes c ON c.id=v.cliente_id AND c.empresa_id=v.empresa_id
+             LEFT JOIN entrega_rastreamento r ON r.venda_id=v.id AND r.expira_em>NOW()
+             WHERE v.id=$1 AND v.empresa_id=$2 AND v.cliente_id=$3 LIMIT 1`,
+            [vendaId, customer.empresaId, customer.id]
+        );
+        const order = rows[0];
+        if (!order) return response.status(404).json({ success: false, message: "Pedido não encontrado." });
+        if (order.status === "CANCELADA" && tipo !== "RECLAMACAO") {
+            return response.status(409).json({ success: false, message: "Este pedido já está cancelado. Use Reclamação se precisar de atendimento." });
+        }
+        const delivered = ["ENTREGUE", "FINALIZADA"].includes(order.status);
+        if (tipo === "CANCELAMENTO" && delivered) {
+            return response.status(400).json({ success: false, message: "Para um pedido entregue, escolha arrependimento ou devolução." });
+        }
+        if (tipo === "DEVOLUCAO" && !delivered) {
+            return response.status(400).json({ success: false, message: "Antes da entrega, solicite o cancelamento do pedido." });
+        }
+        if (tipo === "ARREPENDIMENTO" && delivered &&
+            Date.now() - new Date(order.entregue_em || order.updated_at || order.data_venda).getTime() > 7 * 86400000) {
+            return response.status(409).json({ success: false,
+                message: "O prazo de 7 dias para arrependimento terminou. Use Reclamação para solicitar análise da loja." });
+        }
+        const cancellation = avaliarCancelamento(order);
+        if (tipo === "CANCELAMENTO" && !cancellation.permitido) {
+            return response.status(409).json({ success: false,
+                message: `${cancellation.mensagem} Você ainda pode registrar arrependimento ou reclamação para análise da loja.`,
+                data: { cancelamento: cancellation } });
+        }
+
+        const existing = await db.query(
+            `SELECT * FROM solicitacoes_consumidor WHERE empresa_id=$1 AND venda_id=$2
+             AND status IN ('RECEBIDA','EM_ANALISE') ORDER BY solicitada_em DESC LIMIT 1`,
+            [customer.empresaId, vendaId]
+        );
+        if (existing.rows[0]) {
+            return response.status(200).json({ success: true,
+                message: "A loja já recebeu uma solicitação para este pedido.", data: existing.rows[0] });
+        }
+
+        const protocolo = buildConsumerProtocol();
+        let item;
+        try {
+            const inserted = await db.query(
+                `INSERT INTO solicitacoes_consumidor
+                 (protocolo,empresa_id,cliente_id,venda_id,email_referencia,tipo,motivo)
+                 VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+                [protocolo, customer.empresaId, customer.id, vendaId,
+                    order.cliente_email || customer.email || null, tipo, motivo]
+            );
+            item = inserted.rows[0];
+        } catch (error) {
+            if (error.code !== "23505") throw error;
+            const concurrent = await db.query(
+                `SELECT * FROM solicitacoes_consumidor WHERE empresa_id=$1 AND venda_id=$2
+                 AND status IN ('RECEBIDA','EM_ANALISE') ORDER BY solicitada_em DESC LIMIT 1`,
+                [customer.empresaId, vendaId]
+            );
+            item = concurrent.rows[0];
+            if (!item) {
+                const conflict = new Error("Não foi possível gerar o protocolo. Tente novamente.");
+                conflict.statusCode = 409;
+                throw conflict;
+            }
+        }
+
+        let automatic = false;
+        if (!delivered && cancellation.permitido && ["CANCELAMENTO", "ARREPENDIMENTO"].includes(tipo)) {
+            try {
+                const canceled = await VendaService.cancelarPedido(customer.empresaId, vendaId, {
+                    motivo: `Solicitação do cliente ${item.protocolo}: ${motivo}`
+                });
+                if (canceled?.status === "CANCELADA") {
+                    automatic = true;
+                    const updated = await db.query(
+                        `UPDATE solicitacoes_consumidor SET status='ATENDIDA',
+                         resposta='Pedido cancelado. Quando aplicável, o estorno foi solicitado ao PagBank.',
+                         atendida_em=NOW(),updated_at=NOW() WHERE id=$1 RETURNING *`, [item.id]
+                    );
+                    item = updated.rows[0];
+                }
+            } catch (error) {
+                console.warn("[atendimento] cancelamento automático pendente", { protocolo: item.protocolo, code: error.code || error.status });
+            }
+        }
+
+        if (!automatic) {
+            await createCustomerNotification({ clienteId: customer.id,
+                titulo: "Solicitação recebida",
+                mensagem: `Protocolo ${item.protocolo}. A loja responderá pelo site e pelo e-mail cadastrado.`,
+                tipo: "ATENDIMENTO" });
+        }
+        await sendOptionalEmail({
+            to: order.cliente_email || customer.email,
+            subject: `Solicitação recebida ${item.protocolo} - PetFlow`,
+            text: `Recebemos sua solicitação sobre o pedido #${vendaId.slice(0,8).toUpperCase()}. Protocolo: ${item.protocolo}. ${automatic ? "O pedido foi cancelado." : "A loja responderá em até 5 dias."}`,
+            html: `<div style="font-family:Arial,sans-serif;max-width:620px;margin:auto;padding:24px"><h1>Solicitação recebida</h1><p>Protocolo: <strong>${escapeHtml(item.protocolo)}</strong></p><p>Pedido #${escapeHtml(vendaId.slice(0,8).toUpperCase())}</p><p>${automatic ? "O pedido foi cancelado e o estorno foi solicitado quando aplicável." : "A loja responderá em até 5 dias."}</p></div>`,
+            idempotencyKey: `atendimento/${item.id}/recebida`
+        });
+        return response.status(automatic ? 200 : 201).json({ success: true,
+            message: automatic ? "Pedido cancelado com sucesso." : "Solicitação recebida e encaminhada à loja.",
+            data: item });
+    } catch (error) { return next(error); }
+}
+
+function buildConsumerProtocol() {
+    return `ATD-${new Date().toISOString().slice(0,10).replaceAll("-","")}-${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
 }
 
 async function orders(request, response, next) {
@@ -1149,6 +1301,29 @@ async function orders(request, response, next) {
                 customer.empresaId
             ]
         );
+
+        const { rows: requests } = await db.query(
+            `SELECT DISTINCT ON (venda_id) id,protocolo,venda_id,tipo,status,motivo,resposta,
+                    solicitada_em,prazo_em,atendida_em
+             FROM solicitacoes_consumidor
+             WHERE empresa_id=$1 AND cliente_id=$2
+             ORDER BY venda_id,solicitada_em DESC`,
+            [customer.empresaId, customer.id]
+        );
+        const requestByOrder = new Map(requests.map(item => [String(item.venda_id), item]));
+        const { rows: trackingRows } = await db.query(
+            `SELECT venda_id,latitude,longitude,precisao_m,atualizado_em,rota
+             FROM entrega_rastreamento WHERE venda_id=ANY($1::uuid[]) AND expira_em>NOW()`,
+            [rows.map(order => order.id)]
+        );
+        const trackingByOrder = new Map(trackingRows.map(item => [String(item.venda_id), item]));
+        rows.forEach(order => {
+            order.solicitacao = requestByOrder.get(String(order.id)) || null;
+            const cancellation = avaliarCancelamento({ ...order, ...(trackingByOrder.get(String(order.id)) || {}) });
+            order.cancelamento_disponivel = cancellation.permitido;
+            order.cancelamento_mensagem = cancellation.mensagem;
+            order.distancia_destino_m = cancellation.distanciaMetros;
+        });
 
         return response.status(200).json({
             success: true,
@@ -1339,7 +1514,8 @@ function buildAuthPayload(cliente) {
             id: cliente.id,
             empresaId: cliente.empresa_id,
             email: cliente.email,
-            nome: cliente.nome
+            nome: cliente.nome,
+            sv: Number(cliente.sessao_versao)
         },
         JWT_SECRET,
         {
@@ -1574,6 +1750,11 @@ function firstName(name) {
 
 }
 
+function escapeHtml(value) {
+    return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
+}
+
 /* ==================================================
    EXPORTAÇÃO
 ================================================== */
@@ -1581,6 +1762,7 @@ function firstName(name) {
 module.exports = {
     register,
     login,
+    logout,
     forgotPassword,
     verifyEmail,
     resendVerification,
@@ -1591,6 +1773,7 @@ module.exports = {
     exportData,
     createLgpdRequest,
     listLgpdRequests,
+    createConsumerRequest,
     orders,
     notifications,
     markNotificationRead

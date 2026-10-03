@@ -191,6 +191,19 @@ a {
     display: block;
 }
 
+.cart-item .stock-message,
+.cart-stock-status {
+    color: #a52828;
+    font-size: .82rem;
+    font-weight: 700;
+    line-height: 1.35;
+}
+
+.cart-item .stock-message {
+    display: block;
+    margin-top: 6px;
+}
+
 .cart-item strong {
     margin-bottom: 6px;
     line-height: 1.35;
