@@ -24,19 +24,24 @@
         })();
         return loading;
     }
-    function vehicleMarker(map) {
+    function positionMarker(map, navigation) {
         // Ícone com tamanho fixo em pixels, ancorado às coordenadas reais recebidas.
-        class Vehicle extends google.maps.OverlayView {
-            constructor() { super(); this.position = null; this.setMap(map); }
+        class PositionMarker extends google.maps.OverlayView {
+            constructor() { super(); this.position = null; this.heading = null; this.setMap(map); }
             onAdd() {
                 this.element = document.createElement("div");
-                this.element.className = "delivery-vehicle-marker";
+                this.element.className = navigation ? "delivery-driver-marker" : "delivery-vehicle-marker";
                 this.element.setAttribute("role", "img");
                 this.element.setAttribute("aria-label", "Última posição do entregador");
-                this.element.title = "Entregador";
-                const icon = document.createElement("img");
-                icon.src = "/images/icons/delivery-car.svg"; icon.alt = ""; icon.width = icon.height = 56;
-                this.element.appendChild(icon);
+                this.element.title = navigation ? "Sua posição GPS" : "Entregador";
+                this.icon = document.createElement("img");
+                this.icon.src = navigation ? "/images/icons/delivery-arrow.svg" : "/images/icons/delivery-car.svg";
+                this.icon.alt = ""; this.icon.width = this.icon.height = navigation ? 44 : 56;
+                this.element.appendChild(this.icon);
+                if (navigation) {
+                    this.dot = document.createElement("span"); this.dot.className = "delivery-driver-dot";
+                    this.element.appendChild(this.dot); this.setHeading(this.heading);
+                }
                 this.getPanes().overlayMouseTarget.appendChild(this.element);
                 this.draw();
             }
@@ -48,29 +53,53 @@
                 if (point) { this.element.style.left = `${point.x}px`; this.element.style.top = `${point.y}px`; }
             }
             setPosition(position) { this.position = position; this.draw(); }
+            setHeading(heading) {
+                this.heading = heading;
+                if (!this.dot) return;
+                this.icon.hidden = heading === null; this.dot.hidden = heading !== null;
+                this.icon.style.transform = heading === null ? "" : `rotate(${heading}deg)`;
+            }
             onRemove() { this.element?.remove(); this.element = null; }
         }
-        return new Vehicle();
+        return new PositionMarker();
     }
-    window.PetFlowDeliveryMap = function () {
+    function movementHeading(previous, current, precision) {
+        if (!previous) return null;
+        const radians = value => value * Math.PI / 180;
+        const lat1 = radians(previous.lat), lat2 = radians(current.lat), delta = radians(current.lng - previous.lng);
+        const a = Math.sin((lat2-lat1)/2)**2 + Math.cos(lat1)*Math.cos(lat2)*Math.sin(delta/2)**2;
+        const distance = 6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(Math.max(0,1-a)));
+        if (distance < Math.max(5, Number(precision) || 0)) return null;
+        return (Math.atan2(Math.sin(delta)*Math.cos(lat2), Math.cos(lat1)*Math.sin(lat2)-Math.sin(lat1)*Math.cos(lat2)*Math.cos(delta)) * 180 / Math.PI + 360) % 360;
+    }
+    window.PetFlowDeliveryMap = function ({ mode = "tracking" } = {}) {
+        const navigation = mode === "driver";
         const element = document.getElementById("deliveryMap"), message = document.getElementById("mapStatus");
-        let map, driver, destination, route, accuracy, lastPolyline, version = 0;
-        let currentPosition;
+        const recenter = navigation ? document.getElementById("recenterMap") : null;
+        let map, driver, destination, route, accuracy, lastPolyline, lastDestination, version = 0;
+        let currentPosition, previousPosition, heading = null, following = true;
         function resizeMarkers() {
+            if (!map || !currentPosition) return;
             const metersPerPixel = 156543.03392 * Math.cos(currentPosition.lat * Math.PI / 180) / 2 ** map.getZoom();
             destination.setRadius(metersPerPixel * 9);
         }
+        recenter?.addEventListener("click", () => {
+            if (!map || !currentPosition || element.hidden) return;
+            following = true; map.panTo(currentPosition);
+        });
         return {
-            hide() { version++; element.hidden = true; message.textContent = ""; },
+            hide() { version++; element.hidden = true; message.textContent = ""; previousPosition = null; heading = null; following = true; if (recenter) recenter.hidden = true; },
             async update(data) {
                 const current = ++version, address = data.endereco_entrega;
                 const originElement = document.getElementById("originAddress");
                 const destinationText = address ? [address.endereco,address.numero,address.complemento,address.bairro,address.cidade,address.estado,address.cep].filter(Boolean).join(", ") : "";
                 document.getElementById("destinationAddress").textContent = destinationText ? `Destino: ${destinationText}` : "Endereço da entrega não disponível.";
                 const hasPosition = data.latitude != null && data.longitude != null;
-                const hasRoute = Boolean(data.rota?.tipoOrigem === "GPS_ENTREGADOR" && data.rota.polyline && data.rota.origem && data.rota.destino);
-                if (originElement) originElement.textContent = hasPosition ? "Saída da navegação: última posição GPS recebida do entregador." : "Aguardando a localização do entregador.";
-                if (!hasPosition) { element.hidden = true; message.textContent = "Aguardando o entregador compartilhar o GPS para mostrar o mapa e a rota."; return; }
+                const endpoint = data.rota?.tipoOrigem === "GPS_ENTREGADOR" ? data.rota.destino : null;
+                const hasDestination = Number.isFinite(endpoint?.latitude) && Number.isFinite(endpoint?.longitude);
+                const hasRoute = Boolean(navigation && hasDestination && data.rota.polyline && data.rota.origem);
+                if (originElement) originElement.textContent = hasPosition ? (navigation ? "Sua posição GPS atual é o ponto de partida da rota." : "Localização do entregador: última posição GPS recebida.") : "Aguardando a localização do entregador.";
+                if (!hasPosition) { element.hidden = true; if (recenter) recenter.hidden = true; message.textContent = "Aguardando o entregador compartilhar o GPS para mostrar o mapa."; return; }
                 try {
                     message.textContent = "Carregando mapa...";
                     await loadMaps();
@@ -79,32 +108,39 @@
                     const position = { lat: Number(data.latitude), lng: Number(data.longitude) };
                     currentPosition = position;
                     if (!map) {
-                        map = new google.maps.Map(element, { center: currentPosition, zoom: 16, streetViewControl: false, mapTypeControl: false });
-                        accuracy = new google.maps.Circle({ map, strokeOpacity: 0, fillColor: "#00897b", fillOpacity: .1 });
-                        driver = vehicleMarker(map);
+                        map = new google.maps.Map(element, { center: currentPosition, zoom: navigation ? 17 : 16, streetViewControl: false, mapTypeControl: false });
+                        accuracy = new google.maps.Circle({ map, strokeOpacity: 0, fillColor: navigation ? "#2464d9" : "#00897b", fillOpacity: .1 });
+                        driver = positionMarker(map, navigation);
                         destination = new google.maps.Circle({ map, radius: 14, fillColor: "#e97814", fillOpacity: 1, strokeColor: "#fff", strokeWeight: 3, zIndex: 2 });
-                        route = new google.maps.Polyline({ map, strokeColor: "#2464d9", strokeOpacity: .8, strokeWeight: 5 });
+                        if (navigation) route = new google.maps.Polyline({ map, strokeColor: "#2464d9", strokeOpacity: .8, strokeWeight: 5 });
                         map.addListener("zoom_changed", resizeMarkers);
+                        if (navigation) map.addListener("dragstart", () => { following = false; });
+                    }
+                    if (navigation) {
+                        heading = Number.isFinite(data.heading) ? (data.heading % 360 + 360) % 360 : movementHeading(previousPosition, position, data.precisao_m);
+                        driver.setHeading(heading); previousPosition = position;
+                        if (following) map.panTo(position);
+                        if (recenter) recenter.hidden = false;
                     }
                     driver.setPosition(position); accuracy.setCenter(currentPosition); accuracy.setRadius(hasPosition ? Math.max(0, Number(data.precisao_m) || 0) : 0);
-                    destination.setVisible(hasRoute);
-                    if (hasRoute) {
-                        destination.setCenter({ lat: data.rota.destino.latitude, lng: data.rota.destino.longitude });
-                    } else {
-                        route.setPath([]); lastPolyline = null;
-                    }
+                    destination.setVisible(hasDestination);
+                    const destinationPosition = hasDestination ? { lat: endpoint.latitude, lng: endpoint.longitude } : null;
+                    if (hasDestination) destination.setCenter(destinationPosition);
+                    if (navigation && !hasRoute) { route.setPath([]); lastPolyline = null; }
                     resizeMarkers();
                     if (hasRoute && lastPolyline !== data.rota.polyline) {
                         const path = google.maps.geometry.encoding.decodePath(data.rota.polyline);
                         route.setPath(path);
-                        const bounds = new google.maps.LatLngBounds(); path.forEach(point => bounds.extend(point));
-                        bounds.extend({ lat: data.rota.origem.latitude, lng: data.rota.origem.longitude });
-                        bounds.extend({ lat: data.rota.destino.latitude, lng: data.rota.destino.longitude });
-                        if (position) bounds.extend(position);
-                        map.fitBounds(bounds, 40); lastPolyline = data.rota.polyline;
+                        lastPolyline = data.rota.polyline;
                     }
-                    message.textContent = hasRoute ? "Carrinho: última posição recebida do entregador · Laranja: cliente · Azul: rota calculada a partir do GPS do entregador." : "Carrinho: última posição recebida do entregador. Aguardando a rota até o destino.";
-                } catch (error) { if (current === version) { element.hidden = true; message.textContent = error.message; } }
+                    if (!navigation && hasDestination && lastDestination !== JSON.stringify(destinationPosition)) {
+                        const bounds = new google.maps.LatLngBounds(); bounds.extend(position); bounds.extend(destinationPosition);
+                        map.fitBounds(bounds, 40); lastDestination = JSON.stringify(destinationPosition);
+                    }
+                    message.textContent = navigation
+                        ? `${heading === null ? "Ponto azul: sua posição GPS" : "Seta azul: sua posição e direção de deslocamento"} · Laranja: destino. ${hasRoute ? "Siga a linha azul da rota." : "Aguardando a rota até o destino."}`
+                        : `Carrinho: última posição recebida do entregador. ${hasDestination ? "Ponto laranja: endereço da entrega." : "Aguardando a localização do endereço da entrega."}`;
+                } catch (error) { if (current === version) { element.hidden = true; if (recenter) recenter.hidden = true; message.textContent = error.message; } }
             }
         };
     };

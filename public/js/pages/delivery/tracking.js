@@ -1,6 +1,6 @@
 "use strict";
 (() => {
-    const id = new URLSearchParams(location.search).get("pedido"), map = window.PetFlowDeliveryMap();
+    const id = new URLSearchParams(location.search).get("pedido"), map = window.PetFlowDeliveryMap({ mode: "tracking" });
     const status = document.getElementById("trackingStatus"), updated = document.getElementById("trackingUpdated"), login = document.getElementById("trackingLogin");
     const admin = location.pathname === "/admin/acompanhar-entrega";
     const endpoint = admin ? "/api/vendas" : "/api/public/pedidos";
@@ -11,7 +11,7 @@
         const back = document.getElementById("trackingBack");
         back.href = `/admin/pages/vendas/vendas.html${id ? `?pedido=${encodeURIComponent(id)}` : ""}`;
         back.textContent = "← Voltar ao pedido";
-        document.getElementById("trackingDescription").textContent = "Veja o GPS do entregador e a rota até o cliente. Atualizamos a posição a cada 5 segundos enquanto esta página estiver visível. Esta tela apenas acompanha a entrega.";
+        document.getElementById("trackingDescription").textContent = "Veja o carrinho na posição do entregador e o ponto do endereço da entrega. Atualizamos a posição a cada 5 segundos enquanto esta página estiver visível. Esta tela apenas acompanha a entrega.";
         login.textContent = "Entrar no painel administrativo";
     }
     let pending = false, ended = false;
@@ -35,7 +35,7 @@
                 map.hide(); status.textContent = "Pedido saiu para entrega. Aguardando o entregador compartilhar o GPS."; updated.textContent = ""; return;
             }
             const stale = Date.now() - new Date(data.atualizado_em).getTime() > 120000;
-            status.textContent = stale ? "Sem atualização recente. O mapa mostra a última posição conhecida, não a posição atual." : (admin ? "Entregador a caminho. Acompanhe a posição e a rota até o cliente no mapa." : "Entregador a caminho! Acompanhe o mapa e prepare-se para receber seu pedido.");
+            status.textContent = stale ? "Sem atualização recente. O mapa mostra a última posição conhecida, não a posição atual." : (admin ? "Entregador a caminho. Acompanhe a posição e o ponto da entrega no mapa." : "Entregador a caminho! Acompanhe o mapa e prepare-se para receber seu pedido.");
             updated.textContent = `${new Date(data.atualizado_em).toLocaleString("pt-BR")} · Precisão aproximada: ${Math.round(data.precisao_m)} m`;
             map.update(data);
         } catch (error) { status.textContent = `${error.message} A posição atual não pôde ser confirmada.`; map.hide(); updated.textContent = ""; }

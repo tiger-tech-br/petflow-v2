@@ -2,7 +2,7 @@
 (() => {
     const token = location.hash.slice(1), status = document.getElementById("gpsStatus");
     const start = document.getElementById("startGps"), stop = document.getElementById("stopGps"), retryRoute = document.getElementById("refreshRoute");
-    const map = window.PetFlowDeliveryMap();
+    const map = window.PetFlowDeliveryMap({ mode: "driver" });
     let running = false, pending = false, routePending = false, timer, generation = 0, trip, lastRouteAttempt = 0, wakeLock;
     async function api(path, method = "GET", body) {
         const response = await fetch(`/api/public/entregas/${path}`, { method, headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -31,7 +31,7 @@
             const route = await api("rota", "POST");
             if (!running || current !== generation) return;
             trip.rota = route; map.update(trip);
-            document.getElementById("routeStatus").textContent = "Rota atualizada para você e para o cliente.";
+            document.getElementById("routeStatus").textContent = "Rota até o endereço da entrega atualizada.";
         } catch (error) {
             if (current !== generation) return;
             document.getElementById("routeStatus").textContent = error.message;
@@ -48,7 +48,7 @@
             const coords = { latitude: position.coords.latitude, longitude: position.coords.longitude, precisao: position.coords.accuracy };
             await api("localizacao", "POST", coords);
             if (!running || current !== generation) return;
-            trip = { ...trip, ...coords, precisao_m: coords.precisao, atualizado_em: new Date().toISOString() };
+            trip = { ...trip, ...coords, heading: Number.isFinite(position.coords.heading) ? position.coords.heading : null, precisao_m: coords.precisao, atualizado_em: new Date().toISOString() };
             status.textContent = `Viagem em andamento. GPS enviado às ${new Date().toLocaleTimeString("pt-BR")}. Precisão aproximada: ${Math.round(coords.precisao)} m.`;
             map.update(trip);
             if (Date.now() - lastRouteAttempt > (trip.rota?.tipoOrigem === "GPS_ENTREGADOR" ? 300000 : 60000)) getRoute();
