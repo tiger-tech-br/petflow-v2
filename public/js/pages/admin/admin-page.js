@@ -135,6 +135,7 @@
             ["cupons", "/admin/pages/cupons/cupons.html", "fa-ticket", "Cupons"],
             ["usuarios", "/admin/pages/usuarios/usuarios.html", "fa-user-shield", "Usuários"],
             ["auditoria", "/admin/pages/auditoria/auditoria.html", "fa-clock-rotate-left", "Auditoria"]
+            ,["lgpd", "/admin/pages/lgpd/lgpd.html", "fa-shield-halved", "LGPD"]
         ];
         for (const [key, href, icon, label] of links) {
             if (nav.querySelector(`[data-active-page="${key}"]`)) continue;
@@ -770,6 +771,20 @@
 
             if (field.type === "checkbox") {
                 input.checked = value === true || value === "true";
+                return;
+            }
+
+            if (field.type === "date" && value) {
+                input.value = String(value).slice(0, 10);
+                return;
+            }
+
+            if (field.type === "datetime-local" && value) {
+                const date = new Date(value);
+                input.value = Number.isNaN(date.getTime())
+                    ? String(value).slice(0, 16)
+                    : new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+                        .toISOString().slice(0, 16);
                 return;
             }
 
@@ -1817,15 +1832,36 @@
 
         const summary = {
             total: String(records.length),
-            active: String(records.filter(record => record.ativo !== false).length),
-            inactive: String(records.filter(record => record.ativo === false).length),
+            active: String(records.filter(record => (record.ativo ?? record.status) !== false).length),
+            inactive: String(records.filter(record => (record.ativo ?? record.status) === false).length),
             new_month: String(records.filter(record => {
                 const date = new Date(record.created_at);
 
                 return !Number.isNaN(date.getTime()) &&
                     date.getMonth() === currentMonth &&
                     date.getFullYear() === currentYear;
-            }).length)
+            }).length),
+            missing_image: String(records.filter(record => !record.foto).length),
+            low_stock: String(records.filter(record => Number(record.quantidade) <= Number(record.estoque_minimo || 0)).length),
+            healthy_stock: String(records.filter(record => Number(record.quantidade) > Number(record.estoque_minimo || 0)).length),
+            missing_location: String(records.filter(record => !String(record.localizacao || "").trim()).length),
+            finance_receivable: formatAdminCurrency(records
+                .filter(record => record.tipo === "RECEBER" && ["PENDENTE", "ATRASADO"].includes(record.status))
+                .reduce((sum, record) => sum + Number(record.valor || 0) - Number(record.valor_pago || 0), 0)),
+            finance_payable: formatAdminCurrency(records
+                .filter(record => record.tipo === "PAGAR" && ["PENDENTE", "ATRASADO"].includes(record.status))
+                .reduce((sum, record) => sum + Number(record.valor || 0) - Number(record.valor_pago || 0), 0)),
+            finance_overdue: String(records.filter(record =>
+                ["PENDENTE", "ATRASADO"].includes(record.status) &&
+                record.data_vencimento && new Date(`${String(record.data_vencimento).slice(0, 10)}T23:59:59`) < today
+            ).length),
+            finance_paid: formatAdminCurrency(records
+                .filter(record => record.status === "PAGO")
+                .reduce((sum, record) => sum + Number(record.valor_pago || record.valor || 0), 0)),
+            lgpd_open: String(records.filter(record => ["ABERTA", "EM_ANALISE"].includes(record.status)).length),
+            lgpd_due: String(records.filter(record => ["ABERTA", "EM_ANALISE"].includes(record.status) &&
+                record.prazo_em && new Date(record.prazo_em).getTime() <= Date.now() + 3 * 86400000).length),
+            lgpd_done: String(records.filter(record => record.status === "ATENDIDA").length)
         };
 
         document.querySelectorAll("[data-insight-key]").forEach(card => {
@@ -1939,6 +1975,9 @@
                 );
             }
         });
+
+        if (field.disabled) attributes.push("disabled");
+        if (field.readonly) attributes.push("readonly");
 
         return attributes.join(" ");
     }

@@ -4,6 +4,11 @@ const bcrypt = require("bcrypt");
 const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
 const db = require("../database/connection");
+const PRIVACY_VERSION = "2026-10-03";
+
+function digest(value) {
+    return crypto.createHash("sha256").update(String(value || "")).digest("hex");
+}
 const {
     JWT_SECRET,
     JWT_EXPIRES_IN,
@@ -33,6 +38,13 @@ async function register(request, response, next) {
                 message: "Informe nome, WhatsApp, e-mail, senha e endereço de entrega."
             });
 
+        }
+
+        if (data.aceite_privacidade !== true && data.aceite_privacidade !== "true" && data.aceite_privacidade !== "on") {
+            return response.status(400).json({
+                success: false,
+                message: "Leia e aceite a Política de Privacidade para criar sua conta."
+            });
         }
 
         assertEmailConfigured();
@@ -195,6 +207,8 @@ async function register(request, response, next) {
                         cidade,
                         estado,
                         data_nascimento,
+                        privacidade_versao,
+                        privacidade_aceita_em,
                         ativo
                     )
                     VALUES (
@@ -212,6 +226,8 @@ async function register(request, response, next) {
                         $11,
                         $12,
                         $13,
+                        $14,
+                        NOW(),
                         TRUE
                     )
                     RETURNING id
@@ -229,13 +245,22 @@ async function register(request, response, next) {
                     data.bairro || null,
                     data.cidade || null,
                     data.estado || null,
-                    data.data_nascimento || data.dataNascimento || null
+                    data.data_nascimento || data.dataNascimento || null,
+                    PRIVACY_VERSION
                 ]
             );
 
             clienteId = created.rows[0].id;
 
         }
+
+
+        await client.query(
+            `INSERT INTO lgpd_consentimentos
+             (empresa_id,cliente_id,finalidade,versao,concedido,origem,ip_hash,user_agent_hash)
+             VALUES ($1,$2,'POLITICA_PRIVACIDADE',$3,TRUE,'CADASTRO',$4,$5)`,
+            [empresaId, clienteId, PRIVACY_VERSION, digest(request.ip), digest(request.get("user-agent"))]
+        );
 
         await client.query(
             `
@@ -621,12 +646,13 @@ async function resetPassword(request, response, next) {
         if (
             !token ||
             !senha ||
-            String(senha).length < 6
+            String(senha).length < 8 ||
+            Buffer.byteLength(String(senha), "utf8") > 72
         ) {
 
             return response.status(400).json({
                 success: false,
-                message: "Informe o token e uma senha com no mínimo 6 caracteres."
+                message: "Informe o token e uma senha entre 8 e 72 caracteres."
             });
 
         }
@@ -854,6 +880,33 @@ async function remove(request, response, next) {
             customer.empresaId
         );
 
+        const activeOrders = await client.query(
+            `SELECT COUNT(*)::int AS total FROM vendas
+             WHERE empresa_id=$1 AND cliente_id=$2
+               AND status IN ('AGUARDANDO_PAGAMENTO','PAGAMENTO_APROVADO','EM_SEPARACAO','SAIU_PARA_ENTREGA')`,
+            [customer.empresaId, customer.id]
+        );
+        if (activeOrders.rows[0].total > 0) {
+            const protocoloPendente = buildLgpdProtocol();
+            await client.query(
+                `INSERT INTO lgpd_solicitacoes (protocolo,empresa_id,cliente_id,email_referencia,tipo,detalhes)
+                 VALUES ($1,$2,$3,$4,'EXCLUSAO','Exclusão aguardando conclusão dos pedidos ativos.')`,
+                [protocoloPendente, customer.empresaId, customer.id, profile?.email || customer.email || null]
+            );
+            await client.query("COMMIT");
+            return response.status(202).json({ success: true, pending: true, protocolo: protocoloPendente,
+                message: "Solicitação registrada. A conta será analisada após a conclusão dos pedidos em andamento." });
+        }
+
+        const protocolo = buildLgpdProtocol();
+        await client.query(
+            `INSERT INTO lgpd_solicitacoes
+             (protocolo,empresa_id,cliente_id,email_referencia,tipo,status,detalhes,resposta,atendida_em)
+             VALUES ($1,$2,$3,$4,'EXCLUSAO','ATENDIDA','Exclusão solicitada pela área autenticada.',
+             'Conta removida e dados operacionais não obrigatórios eliminados.',NOW())`,
+            [protocolo, customer.empresaId, customer.id, profile?.email || customer.email || null]
+        );
+
         await client.query(
             `
                 DELETE FROM newsletter_inscritos
@@ -873,6 +926,7 @@ async function remove(request, response, next) {
                 UPDATE vendas
                 SET
                     cliente_id = NULL,
+                    endereco_entrega = jsonb_build_object('anonimizado', TRUE),
                     updated_at = NOW()
                 WHERE empresa_id = $1
                   AND cliente_id = $2
@@ -909,7 +963,8 @@ async function remove(request, response, next) {
 
         return response.status(200).json({
             success: true,
-            message: "Cadastro excluído com sucesso."
+            protocolo,
+            message: "Cadastro excluído e dados pessoais não necessários removidos com sucesso."
         });
 
     } catch (error) {
@@ -923,6 +978,87 @@ async function remove(request, response, next) {
 
     }
 
+}
+
+async function exportData(request, response, next) {
+    try {
+        const customer = getAuthenticatedCustomer(request, response);
+        if (!customer) return;
+        const [profile, ordersResult, notices, consents, requests] = await Promise.all([
+            getProfileById(customer.id, customer.empresaId),
+            db.query(`SELECT id,data_venda,valor_total,desconto,valor_frete,valor_final,forma_pagamento,
+                      status,endereco_entrega,observacoes,cupom_codigo,created_at,updated_at
+                      FROM vendas WHERE empresa_id=$1 AND cliente_id=$2 ORDER BY data_venda DESC`,
+                [customer.empresaId, customer.id]),
+            db.query(`SELECT titulo,mensagem,tipo,lida,enviada_em FROM notificacoes
+                      WHERE cliente_id=$1 ORDER BY enviada_em DESC`, [customer.id]),
+            db.query(`SELECT finalidade,versao,concedido,origem,created_at FROM lgpd_consentimentos
+                      WHERE empresa_id=$1 AND cliente_id=$2 ORDER BY created_at DESC`,
+                [customer.empresaId, customer.id]),
+            db.query(`SELECT protocolo,tipo,status,detalhes,resposta,solicitada_em,prazo_em,atendida_em
+                      FROM lgpd_solicitacoes WHERE empresa_id=$1 AND cliente_id=$2 ORDER BY solicitada_em DESC`,
+                [customer.empresaId, customer.id])
+        ]);
+        response.set("Cache-Control", "no-store");
+        response.set("Content-Disposition", `attachment; filename="petflow-meus-dados-${new Date().toISOString().slice(0,10)}.json"`);
+        return response.json({ geradoEm: new Date().toISOString(), titular: profile,
+            pedidos: ordersResult.rows, notificacoes: notices.rows,
+            consentimentos: consents.rows, solicitacoes: requests.rows });
+    } catch (error) { return next(error); }
+}
+
+async function createLgpdRequest(request, response, next) {
+    try {
+        const customer = getAuthenticatedCustomer(request, response);
+        if (!customer) return;
+        const tipo = String(request.body?.tipo || "").toUpperCase();
+        const allowed = ["ACESSO","CORRECAO","ANONIMIZACAO","EXCLUSAO","PORTABILIDADE","REVOGACAO","INFORMACAO"];
+        if (!allowed.includes(tipo)) return response.status(400).json({ success: false, message: "Tipo de solicitação inválido." });
+        const details = String(request.body?.detalhes || "").trim().slice(0, 1000);
+        if (details.length < 5) return response.status(400).json({ success: false, message: "Descreva sua solicitação." });
+        const profile = await getProfileById(customer.id, customer.empresaId);
+        const protocolo = buildLgpdProtocol();
+        const result = await db.transaction(async client => {
+            const { rows } = await client.query(
+            `INSERT INTO lgpd_solicitacoes
+             (protocolo,empresa_id,cliente_id,email_referencia,tipo,detalhes)
+             VALUES ($1,$2,$3,$4,$5,$6) RETURNING protocolo,tipo,status,solicitada_em,prazo_em`,
+            [protocolo, customer.empresaId, customer.id, profile?.email || customer.email, tipo, details]
+        );
+        if (tipo === "REVOGACAO") {
+            await client.query("DELETE FROM newsletter_inscritos WHERE empresa_id=$1 AND LOWER(email)=LOWER($2)",
+                [customer.empresaId, profile?.email || customer.email]);
+            await client.query(
+                `INSERT INTO lgpd_consentimentos
+                 (empresa_id,cliente_id,finalidade,versao,concedido,origem,ip_hash,user_agent_hash)
+                 VALUES ($1,$2,'MARKETING',$3,FALSE,'AREA_CLIENTE',$4,$5)`,
+                [customer.empresaId, customer.id, PRIVACY_VERSION, digest(request.ip), digest(request.get("user-agent"))]
+            );
+        }
+            return rows[0];
+        });
+        return response.status(201).json({ success: true, message: "Solicitação registrada com sucesso.", data: result });
+    } catch (error) { return next(error); }
+}
+
+async function listLgpdRequests(request, response, next) {
+    try {
+        const customer = getAuthenticatedCustomer(request, response);
+        if (!customer) return;
+        const { rows } = await db.query(
+            `SELECT protocolo,tipo,status,detalhes,resposta,solicitada_em,prazo_em,atendida_em
+             FROM lgpd_solicitacoes
+             WHERE empresa_id=$1 AND cliente_id=$2
+             ORDER BY solicitada_em DESC`,
+            [customer.empresaId, customer.id]
+        );
+        response.set("Cache-Control", "no-store");
+        return response.json({ success: true, data: rows });
+    } catch (error) { return next(error); }
+}
+
+function buildLgpdProtocol() {
+    return `LGPD-${new Date().toISOString().slice(0,10).replaceAll("-","")}-${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
 }
 
 async function orders(request, response, next) {
@@ -1258,7 +1394,7 @@ function hasRequiredRegistrationData(data) {
         typeof data.senha === "string" &&
         Buffer.byteLength(data.senha, "utf8") <= 72 &&
         hasText(data.senha) &&
-        String(data.senha).length >= 6
+        String(data.senha).length >= 8
     );
 
 }
@@ -1452,6 +1588,9 @@ module.exports = {
     me,
     update,
     remove,
+    exportData,
+    createLgpdRequest,
+    listLgpdRequests,
     orders,
     notifications,
     markNotificationRead

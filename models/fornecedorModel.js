@@ -7,13 +7,7 @@ async function listar(empresaId) {
         SELECT *
         FROM fornecedores
         WHERE ativo = TRUE
-        AND (
-            empresa_id = get_petflow_empresa_id()
-            OR (
-                $1::uuid IS NOT NULL
-                AND empresa_id = $1
-            )
-        )
+          AND empresa_id = $1
         ORDER BY nome ASC
     `;
 
@@ -27,13 +21,7 @@ async function buscarPorId(id, empresaId) {
         SELECT *
         FROM fornecedores
         WHERE id = $1
-        AND (
-            empresa_id = get_petflow_empresa_id()
-            OR (
-                $2::uuid IS NOT NULL
-                AND empresa_id = $2
-            )
-        )
+        AND empresa_id = $2
         LIMIT 1
     `;
 
@@ -54,11 +42,12 @@ async function criar(dados) {
             email,
             endereco
         )
-        VALUES (get_petflow_empresa_id(), $1, $2, $3, $4, $5, $6, $7)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         RETURNING *
     `;
 
     const valores = [
+        dados.empresa_id,
         dados.nome,
         dados.razao_social || dados.nome,
         dados.nome_fantasia || dados.nome,
@@ -86,13 +75,7 @@ async function atualizar(id, empresaId, dados) {
             endereco = $7,
             updated_at = CURRENT_TIMESTAMP
         WHERE id = $8
-        AND (
-            empresa_id = get_petflow_empresa_id()
-            OR (
-                $9::uuid IS NOT NULL
-                AND empresa_id = $9
-            )
-        )
+        AND empresa_id = $9
         RETURNING *
     `;
 
@@ -119,13 +102,7 @@ async function excluir(id, empresaId) {
             SELECT id
             FROM compras
             WHERE fornecedor_id = $1
-            AND (
-                empresa_id = get_petflow_empresa_id()
-                OR (
-                    $2::uuid IS NOT NULL
-                    AND empresa_id = $2
-                )
-            )
+            AND empresa_id = $2
             LIMIT 1
         `,
         [id, empresaId]
@@ -139,13 +116,7 @@ async function excluir(id, empresaId) {
                     ativo = FALSE,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = $1
-                AND (
-                    empresa_id = get_petflow_empresa_id()
-                    OR (
-                        $2::uuid IS NOT NULL
-                        AND empresa_id = $2
-                    )
-                )
+                AND empresa_id = $2
                 RETURNING *
             `,
             [id, empresaId]
@@ -157,13 +128,7 @@ async function excluir(id, empresaId) {
     const query = `
         DELETE FROM fornecedores
         WHERE id = $1
-        AND (
-            empresa_id = get_petflow_empresa_id()
-            OR (
-                $2::uuid IS NOT NULL
-                AND empresa_id = $2
-            )
-        )
+        AND empresa_id = $2
         RETURNING *
     `;
 

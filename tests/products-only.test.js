@@ -101,8 +101,14 @@ test("rotas removidas retornam 404 e paginas comerciais continuam acessiveis", a
         }
         const booking = await fetch(base + "/api/public/agendamentos", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
         assert.equal(booking.status, 404);
-        for (const route of ["/", "/sacola", "/meus-pedidos", "/produtos/racao", "/admin/pages/dashboard/dashboard.html", "/admin/pages/produtos/produtos.html", "/admin/pages/vendas/vendas.html"]) {
+        for (const route of ["/", "/login", "/conta", "/sacola", "/meus-pedidos", "/politica-de-privacidade", "/produtos/racao",
+            "/admin/pages/dashboard/dashboard.html", "/admin/pages/produtos/produtos.html", "/admin/pages/vendas/vendas.html",
+            "/admin/pages/cupons/cupons.html", "/admin/pages/usuarios/usuarios.html",
+            "/admin/pages/auditoria/auditoria.html", "/admin/pages/lgpd/lgpd.html"]) {
             assert.equal((await fetch(base + route)).status, 200, route);
+        }
+        for (const route of ["/api/cupons", "/api/usuarios-admin", "/api/auditoria", "/api/lgpd"]) {
+            assert.equal((await fetch(base + route)).status, 401, route);
         }
     } finally {
         await new Promise(resolve => server.close(resolve));

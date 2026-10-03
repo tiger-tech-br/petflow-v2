@@ -90,6 +90,22 @@ const empresaValidation = [
 
         .withMessage("O endereço é obrigatório."),
 
+    body("numero")
+
+        .trim()
+
+        .notEmpty()
+
+        .withMessage("O número do endereço é obrigatório."),
+
+    body("bairro")
+
+        .trim()
+
+        .notEmpty()
+
+        .withMessage("O bairro é obrigatório."),
+
     body("cidade")
 
         .trim()

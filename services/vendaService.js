@@ -421,6 +421,16 @@ const VendaService = {
                 client
             );
 
+            await audit.registrar({
+                empresaId: venda.empresa_id,
+                acao: "PAGAMENTO_APROVADO",
+                entidade: "VENDA",
+                entidadeId: venda.id,
+                descricao: "Pagamento do pedido confirmado pelo PagBank.",
+                anterior: { status: venda.status },
+                novo: { status: "PAGAMENTO_APROVADO", pagseguro_status: dadosPagamento.pagseguroStatus }
+            }, client);
+
             await client.query("COMMIT");
 
             if (shouldNotifyPayment) {
@@ -475,7 +485,18 @@ const VendaService = {
                 ENTREGUE: ["FINALIZADA"], FINALIZADA: [], CANCELADA: []
             };
             if (!allowed[current.status]?.includes(status)) throw Object.assign(new Error("Esta mudança de status não é permitida. Confira a etapa atual e a confirmação do pagamento."), { status: 409 });
-            return { sale: await VendaModel.atualizarStatus(vendaId,empresaId,status,client), changed: true };
+            const updatedSale = await VendaModel.atualizarStatus(vendaId,empresaId,status,client);
+            await audit.registrar({
+                empresaId,
+                usuarioId: options.usuarioId || null,
+                acao: "ALTERAR_STATUS",
+                entidade: "VENDA",
+                entidadeId: vendaId,
+                descricao: `Status do pedido alterado de ${current.status} para ${status}.`,
+                anterior: { status: current.status },
+                novo: { status }
+            }, client);
+            return { sale: updatedSale, changed: true };
         });
         if (!result) return null;
         if (result.changed) await enviarEmailStatusPedido(result.sale,status);

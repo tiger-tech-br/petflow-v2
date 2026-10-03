@@ -150,10 +150,10 @@ async function resetPassword(request, response, next) {
     try {
         const { token, senha } = request.body;
 
-        if (!token || !senha || String(senha).length < 6) {
+        if (!token || !senha || String(senha).length < 8 || Buffer.byteLength(String(senha), "utf8") > 72) {
             return response.status(400).json({
                 success: false,
-                message: "Informe o token e uma senha com no mínimo 6 caracteres."
+                message: "Informe o token e uma senha entre 8 e 72 caracteres."
             });
         }
 

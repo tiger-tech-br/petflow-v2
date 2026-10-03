@@ -5,6 +5,7 @@
 ================================================== */
 
 const produtoModel = require("../models/produtoModel");
+const audit = require("../services/auditService");
 
 /* ==================================================
    LISTAR
@@ -112,6 +113,9 @@ async function store(request, response, next) {
 
         });
 
+        await audit.registrar({ ...audit.requestMeta(request), acao: "CRIAR", entidade: "PRODUTO",
+            entidadeId: produto.id, descricao: `Produto ${produto.nome} cadastrado.`, novo: produto });
+
         return response.status(201).json({
 
             success: true,
@@ -176,6 +180,9 @@ async function update(request, response, next) {
 
         );
 
+        await audit.registrar({ ...audit.requestMeta(request), acao: "EDITAR", entidade: "PRODUTO",
+            entidadeId: id, descricao: `Produto ${produto.nome} atualizado.`, anterior: existente, novo: produto });
+
         return response.status(200).json({
 
             success: true,
@@ -204,13 +211,20 @@ async function destroy(request, response, next) {
 
         const { id } = request.params;
 
-        await produtoModel.remove(
+        const existente = await produtoModel.findById(id, request.user.empresaId);
+        if (!existente) {
+            return response.status(404).json({ success: false, message: "Produto não encontrado." });
+        }
+        const produto = await produtoModel.remove(
 
             id,
 
             request.user.empresaId
 
         );
+
+        await audit.registrar({ ...audit.requestMeta(request), acao: "DESATIVAR", entidade: "PRODUTO",
+            entidadeId: id, descricao: `Produto ${existente.nome} desativado.`, anterior: existente, novo: produto });
 
         return response.status(200).json({
 

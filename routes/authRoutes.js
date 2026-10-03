@@ -97,8 +97,8 @@ router.post(
         .withMessage("Token obrigatório."),
 
     body("senha")
-        .isLength({ min: 6 })
-        .withMessage("A senha deve ter no mínimo 6 caracteres."),
+        .isLength({ min: 8, max: 72 })
+        .withMessage("A senha deve ter entre 8 e 72 caracteres."),
 
     validationMiddleware,
 

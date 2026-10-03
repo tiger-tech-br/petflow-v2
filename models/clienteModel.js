@@ -69,14 +69,7 @@ async function findDuplicate({
                 END AS field
             FROM clientes c
             WHERE ($3::uuid IS NULL OR id <> $3)
-              AND (
-                  empresa_id = get_petflow_empresa_id()
-                  OR empresa_id IS NULL
-                  OR (
-                      $4::uuid IS NOT NULL
-                      AND empresa_id = $4
-                  )
-              )
+              AND empresa_id = $4
               AND (
                   (
                       $1 <> ''
@@ -153,13 +146,7 @@ async function findAll(empresaId) {
             FROM clientes c
             LEFT JOIN usuarios_clientes uc
                 ON uc.cliente_id = c.id
-            WHERE c.empresa_id = get_petflow_empresa_id()
-               OR c.empresa_id IS NULL
-               OR uc.cliente_id IS NOT NULL
-               OR (
-                   $1::uuid IS NOT NULL
-                   AND c.empresa_id = $1
-               )
+            WHERE c.empresa_id = $1
             ORDER BY c.nome ASC
         `,
         [empresaId || null]
@@ -174,19 +161,7 @@ async function findById(id, empresaId) {
             SELECT *
             FROM clientes
             WHERE id = $1
-              AND (
-                  empresa_id = get_petflow_empresa_id()
-                  OR empresa_id IS NULL
-                  OR EXISTS (
-                      SELECT 1
-                      FROM usuarios_clientes uc
-                      WHERE uc.cliente_id = clientes.id
-                  )
-                  OR (
-                      $2::uuid IS NOT NULL
-                      AND empresa_id = $2
-                  )
-              )
+              AND empresa_id = $2
             LIMIT 1
         `,
         [id, empresaId || null]
@@ -233,12 +208,13 @@ async function create(cliente) {
                 ativo
             )
             VALUES (
-                get_petflow_empresa_id(),
-                $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,TRUE
+                $1,
+                $2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,TRUE
             )
             RETURNING *
         `,
         [
+            cliente.empresaId,
             cliente.nome,
             cliente.cpf,
             cliente.dataNascimento || cliente.data_nascimento || null,
@@ -297,19 +273,7 @@ async function update(id, cliente, empresaId) {
                 observacoes = $14,
                 updated_at = NOW()
             WHERE id = $15
-              AND (
-                  empresa_id = get_petflow_empresa_id()
-                  OR empresa_id IS NULL
-                  OR EXISTS (
-                      SELECT 1
-                      FROM usuarios_clientes uc
-                      WHERE uc.cliente_id = clientes.id
-                  )
-                  OR (
-                      $16::uuid IS NOT NULL
-                      AND empresa_id = $16
-                  )
-              )
+              AND empresa_id = $16
             RETURNING *
         `,
         [
@@ -342,19 +306,7 @@ async function remove(id, empresaId) {
             SET ativo = FALSE,
                 updated_at = NOW()
             WHERE id = $1
-              AND (
-                  empresa_id = get_petflow_empresa_id()
-                  OR empresa_id IS NULL
-                  OR EXISTS (
-                      SELECT 1
-                      FROM usuarios_clientes uc
-                      WHERE uc.cliente_id = clientes.id
-                  )
-                  OR (
-                      $2::uuid IS NOT NULL
-                      AND empresa_id = $2
-                  )
-              )
+              AND empresa_id = $2
         `,
         [id, empresaId || null]
     );

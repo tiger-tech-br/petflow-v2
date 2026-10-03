@@ -36,6 +36,7 @@ const verificationLimiter = require("express-rate-limit")({
 
 router.get("/produtos", publicCatalogController.produtos);
 router.get("/categorias", publicCatalogController.categorias);
+router.get("/loja", publicCatalogController.loja);
 router.post("/newsletter", newsletterController.subscribe);
 router.get("/newsletter/cancelar", newsletterController.unsubscribe);
 router.post("/clientes/cadastro", publicCustomerController.register);
@@ -48,6 +49,9 @@ router.post("/clientes/redefinir-senha", publicCustomerController.resetPassword)
 router.get("/clientes/me", customerAuthMiddleware, publicCustomerController.me);
 router.put("/clientes/me", customerAuthMiddleware, publicCustomerController.update);
 router.delete("/clientes/me", customerAuthMiddleware, publicCustomerController.remove);
+router.get("/clientes/me/dados", customerAuthMiddleware, publicCustomerController.exportData);
+router.post("/clientes/me/solicitacoes-lgpd", customerAuthMiddleware, publicCustomerController.createLgpdRequest);
+router.get("/clientes/me/solicitacoes-lgpd", customerAuthMiddleware, publicCustomerController.listLgpdRequests);
 router.get("/clientes/pedidos", customerAuthMiddleware, publicCustomerController.orders);
 router.get("/clientes/notificacoes", customerAuthMiddleware, publicCustomerController.notifications);
 router.patch("/clientes/notificacoes/lidas", customerAuthMiddleware, publicCustomerController.markNotificationRead);

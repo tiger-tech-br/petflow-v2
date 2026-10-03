@@ -82,7 +82,15 @@ const estoqueValidation = [
 
         .optional()
 
+        .trim(),
+
+    body("motivo")
+
         .trim()
+
+        .isLength({ min: 5, max: 500 })
+
+        .withMessage("Informe o motivo do ajuste de estoque.")
 
 ];
 

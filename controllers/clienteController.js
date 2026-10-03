@@ -5,6 +5,7 @@
 ================================================== */
 
 const clienteModel = require("../models/clienteModel");
+const audit = require("../services/auditService");
 
 /* ==================================================
    LISTAR
@@ -98,6 +99,9 @@ async function store(request, response, next) {
 
         });
 
+        await audit.registrar({ ...audit.requestMeta(request), acao: "CRIAR", entidade: "CLIENTE",
+            entidadeId: cliente.id, descricao: `Cliente ${cliente.nome} cadastrado pelo painel.` });
+
         return response.status(201).json({
 
             success: true,
@@ -126,6 +130,9 @@ async function update(request, response, next) {
 
         const { id } = request.params;
 
+        const anterior = await clienteModel.findById(id, request.user.empresaId);
+        if (!anterior) return response.status(404).json({ success: false, message: "Cliente não encontrado." });
+
         const cliente = await clienteModel.update(
 
             id,
@@ -135,6 +142,9 @@ async function update(request, response, next) {
             request.user.empresaId
 
         );
+
+        await audit.registrar({ ...audit.requestMeta(request), acao: "EDITAR", entidade: "CLIENTE",
+            entidadeId: id, descricao: `Cadastro de ${cliente.nome} atualizado pelo painel.` });
 
         return response.status(200).json({
 
@@ -164,6 +174,9 @@ async function destroy(request, response, next) {
 
         const { id } = request.params;
 
+        const anterior = await clienteModel.findById(id, request.user.empresaId);
+        if (!anterior) return response.status(404).json({ success: false, message: "Cliente não encontrado." });
+
         await clienteModel.remove(
 
             id,
@@ -171,6 +184,9 @@ async function destroy(request, response, next) {
             request.user.empresaId
 
         );
+
+        await audit.registrar({ ...audit.requestMeta(request), acao: "DESATIVAR", entidade: "CLIENTE",
+            entidadeId: id, descricao: `Cadastro de ${anterior.nome} desativado pelo painel.` });
 
         return response.status(200).json({
 

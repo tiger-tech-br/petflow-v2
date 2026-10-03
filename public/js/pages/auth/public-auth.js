@@ -160,6 +160,7 @@ async function setupPublicAccount() {
         fillForm(form, payload.data);
         sessionStorage.setItem("petflow_customer_user", JSON.stringify(payload.data));
         window.PetFlowPublicHeader?.update();
+        await loadLgpdRequests();
     } catch {
         clearPublicSession();
         window.location.href = "/login";
@@ -195,6 +196,34 @@ async function setupPublicAccount() {
         window.location.href = "/";
     });
 
+    document.getElementById("publicExportData")?.addEventListener("click", async () => {
+        setStatus(status, "Preparando seus dados...");
+        try {
+            const data = await request("/clientes/me/dados", "GET");
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json;charset=utf-8" });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = `petflow-meus-dados-${new Date().toISOString().slice(0, 10)}.json`;
+            link.click();
+            URL.revokeObjectURL(link.href);
+            setStatus(status, "Arquivo gerado com sucesso.");
+        } catch (error) { setStatus(status, error.message || "Não foi possível gerar seus dados."); }
+    });
+
+    const lgpdForm = document.getElementById("publicLgpdForm");
+    lgpdForm?.addEventListener("submit", async event => {
+        event.preventDefault();
+        const lgpdStatus = document.getElementById("lgpdStatus");
+        setStatus(lgpdStatus, "Registrando solicitação...");
+        try {
+            const payload = await request("/clientes/me/solicitacoes-lgpd", "POST",
+                Object.fromEntries(new FormData(lgpdForm).entries()));
+            setStatus(lgpdStatus, `${payload.message} Protocolo: ${payload.data.protocolo}.`);
+            lgpdForm.elements.detalhes.value = "";
+            await loadLgpdRequests();
+        } catch (error) { setStatus(lgpdStatus, error.message || "Não foi possível registrar."); }
+    });
+
     document.getElementById("publicDeleteAccount")?.addEventListener("click", async () => {
         const confirmed = window.confirm(
             "Tem certeza que deseja excluir seu cadastro? Você perderá o acesso à área do cliente."
@@ -207,13 +236,45 @@ async function setupPublicAccount() {
         setStatus(status, "Excluindo cadastro...");
 
         try {
-            await request("/clientes/me", "DELETE");
+            const payload = await request("/clientes/me", "DELETE");
+            if (payload.pending) {
+                setStatus(status, `${payload.message} Protocolo: ${payload.protocolo}.`);
+                return;
+            }
             clearPublicSession();
             window.location.href = "/";
         } catch (error) {
             setStatus(status, error.message || "Não foi possível excluir o cadastro.");
         }
     });
+}
+
+async function loadLgpdRequests() {
+    const list = document.getElementById("lgpdRequestList");
+    if (!list) return;
+    try {
+        const payload = await request("/clientes/me/solicitacoes-lgpd", "GET");
+        const items = payload.data || [];
+        list.innerHTML = items.length ? items.map(item => `
+            <article>
+                <div><strong>${escapeHtml(item.protocolo)}</strong><span>${escapeHtml(formatLgpdLabel(item.tipo))}</span></div>
+                <b data-status="${escapeHtml(item.status)}">${escapeHtml(formatLgpdLabel(item.status))}</b>
+                <small>Solicitada em ${escapeHtml(formatDateTime(item.solicitada_em))}</small>
+                ${item.resposta ? `<p><strong>Resposta da loja:</strong> ${escapeHtml(item.resposta)}</p>` : ""}
+            </article>`).join("") : "<p>Você ainda não registrou solicitações.</p>";
+    } catch (error) {
+        list.innerHTML = `<p>${escapeHtml(error.message || "Não foi possível carregar os protocolos.")}</p>`;
+    }
+}
+
+function formatLgpdLabel(value) {
+    return String(value || "").replaceAll("_", " ").toLowerCase()
+        .replace(/^./, letter => letter.toUpperCase());
+}
+
+function formatDateTime(value) {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString("pt-BR");
 }
 
 function clearPublicSession() {

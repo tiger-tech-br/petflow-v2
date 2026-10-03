@@ -128,6 +128,16 @@ const CompraService = {
 
             );
 
+            await audit.registrar({
+                empresaId,
+                usuarioId: compra.usuario_id || null,
+                acao: "CRIAR",
+                entidade: "COMPRA",
+                entidadeId: compraAtualizada.id,
+                descricao: `Compra recebida no valor de ${valorTotal.toFixed(2)}.`,
+                novo: compraAtualizada
+            }, client);
+
             await client.query("COMMIT");
 
             return {

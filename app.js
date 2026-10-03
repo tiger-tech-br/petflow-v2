@@ -51,6 +51,8 @@ const financeiroRoutes = require("./routes/financeiroRoutes");
 const cupomAdminRoutes = require("./routes/cupomAdminRoutes");
 const usuarioAdminRoutes = require("./routes/usuarioAdminRoutes");
 const auditoriaRoutes = require("./routes/auditoriaRoutes");
+const lgpdAdminRoutes = require("./routes/lgpdAdminRoutes");
+const healthRoutes = require("./routes/healthRoutes");
 
 const publicCatalogRoutes = require("./routes/publicCatalogRoutes");
 
@@ -215,6 +217,8 @@ app.get("/api", (request, response) => {
 
 });
 
+app.use("/api", healthRoutes);
+
 /* ==================================================
    ROTAS API
 ================================================== */
@@ -252,6 +256,7 @@ app.use("/api/financeiro", financeiroRoutes);
 app.use("/api/cupons", cupomAdminRoutes);
 app.use("/api/usuarios-admin", usuarioAdminRoutes);
 app.use("/api/auditoria", auditoriaRoutes);
+app.use("/api/lgpd", lgpdAdminRoutes);
 
 /* ==========================
    DASHBOARD

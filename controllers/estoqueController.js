@@ -92,12 +92,32 @@ async function store(request, response, next) {
 
     try {
 
-        const estoque = await estoqueModel.create({
-
-            ...request.body,
-
-            empresaId: request.user.empresaId
-
+        const estoque = await db.transaction(async client => {
+            const produto = await client.query(
+                "SELECT id,nome FROM produtos WHERE id=$1 AND empresa_id=$2 AND ativo=TRUE",
+                [request.body.produtoId, request.user.empresaId]
+            );
+            if (!produto.rows[0]) throw Object.assign(new Error("Produto não encontrado."), { status: 404 });
+            const { rows } = await client.query(
+                `INSERT INTO estoque (empresa_id,produto_id,quantidade,estoque_minimo,estoque_maximo,localizacao)
+                 VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+                [request.user.empresaId, request.body.produtoId, request.body.quantidade,
+                    request.body.estoqueMinimo, request.body.estoqueMaximo,
+                    request.body.localizacao || null]
+            );
+            if (Number(request.body.quantidade) > 0) {
+                await client.query(
+                    `INSERT INTO movimentacoes_estoque
+                     (empresa_id,produto_id,tipo,quantidade,observacao,usuario_id,saldo_anterior,saldo_novo)
+                     VALUES ($1,$2,'ENTRADA',$3,$4,$5,0,$3)`,
+                    [request.user.empresaId, request.body.produtoId, request.body.quantidade,
+                        request.body.motivo || "Estoque inicial", request.user.id]
+                );
+            }
+            await audit.registrar({ ...audit.requestMeta(request), acao: "CRIAR", entidade: "ESTOQUE",
+                entidadeId: request.body.produtoId,
+                descricao: request.body.motivo || `Estoque inicial de ${produto.rows[0].nome}.`, novo: rows[0] }, client);
+            return rows[0];
         });
 
         return response.status(201).json({
@@ -111,7 +131,7 @@ async function store(request, response, next) {
         });
 
     } catch (error) {
-
+        if (error?.code === "23505") error = Object.assign(new Error("Este produto já possui controle de estoque."), { status: 409 });
         next(error);
 
     }
@@ -137,7 +157,7 @@ async function update(request, response, next) {
             const atualizado = await client.query(
                 `UPDATE estoque SET quantidade=$1,estoque_minimo=$2,estoque_maximo=$3,
                  localizacao=$4,updated_at=NOW() WHERE produto_id=$5 AND empresa_id=$6 RETURNING *`,
-                [request.body.quantidade, request.body.estoqueMinimo, request.body.estoqueMaximo || null,
+                [request.body.quantidade, request.body.estoqueMinimo, request.body.estoqueMaximo ?? null,
                     request.body.localizacao || null, produtoId, request.user.empresaId]
             );
             const novo = atualizado.rows[0];

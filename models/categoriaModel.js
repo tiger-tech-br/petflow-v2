@@ -182,10 +182,16 @@ async function update(id, categoria, empresaId) {
 
 async function remove(id, empresaId) {
 
-    await db.query(
+    const result = await db.query(
 
         `
-            DELETE FROM categorias
+            UPDATE categorias
+
+            SET status = FALSE,
+
+                ativo = FALSE,
+
+                updated_at = NOW()
 
             WHERE
 
@@ -194,6 +200,8 @@ async function remove(id, empresaId) {
             AND
 
                 empresa_id = $2
+
+            RETURNING *
         `,
 
         [
@@ -205,6 +213,8 @@ async function remove(id, empresaId) {
         ]
 
     );
+
+    return result.rows[0] || null;
 
 }
 

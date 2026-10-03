@@ -6,43 +6,37 @@
 
 const multer = require("multer");
 
-/* ==================================================
-   CLOUDINARY
-================================================== */
-
-const { CloudinaryStorage } = require("multer-storage-cloudinary");
-
 const { cloudinary } = require("../config/cloudinary");
 
 /* ==================================================
    STORAGE
 ================================================== */
 
-const storage = new CloudinaryStorage({
-
-    cloudinary,
-
-    params: async (request, file) => ({
-
-        folder: "petflow-v2",
-
-        resource_type: "image",
-
-        allowed_formats: [
-
-            "jpg",
-
-            "jpeg",
-
-            "png",
-
-            "webp"
-
-        ]
-
-    })
-
-});
+const storage = {
+    _handleFile(request, file, callback) {
+        const upload = cloudinary.uploader.upload_stream({
+            folder: "petflow-v2",
+            resource_type: "image",
+            allowed_formats: ["jpg", "jpeg", "png", "webp"]
+        }, (error, result) => {
+            if (error) return callback(error);
+            callback(null, {
+                path: result.secure_url,
+                filename: result.public_id,
+                publicId: result.public_id,
+                size: result.bytes,
+                format: result.format
+            });
+        });
+        file.stream.pipe(upload);
+    },
+    _removeFile(request, file, callback) {
+        if (!file.publicId) return callback(null);
+        cloudinary.uploader.destroy(file.publicId)
+            .then(() => callback(null))
+            .catch(callback);
+    }
+};
 
 /* ==================================================
    FILTRO

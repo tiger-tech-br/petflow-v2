@@ -52,8 +52,21 @@ async function categorias(request, response, next) {
     }
 }
 
+async function loja(request, response, next) {
+    try {
+        const { rows } = await db.query(`
+            SELECT nome,razao_social,cnpj,telefone,email,endereco,numero,complemento,
+                   bairro,cidade,estado,cep,horario_abertura,horario_fechamento
+            FROM empresas WHERE id=get_petflow_empresa_id() LIMIT 1
+        `);
+        if (!rows[0]) return response.status(404).json({ success: false, message: "Loja não encontrada." });
+        return response.json({ success: true, data: rows[0] });
+    } catch (error) { next(error); }
+}
+
 
 module.exports = {
     produtos,
-    categorias
+    categorias,
+    loja
 };

@@ -2,6 +2,7 @@
 
 document.addEventListener("DOMContentLoaded", () => {
     loadPublicCatalog();
+    loadStoreInfo();
     setupPublicSearch();
     setupCartCheckout();
     setupFavoritesPanel();
@@ -16,6 +17,23 @@ let publicCart = normalizeCartStorage();
 let publicFavorites = new Set(JSON.parse(sessionStorage.getItem("petflow_public_favorites") || "[]"));
 let publicCustomer = null;
 let currentSearchTerm = "";
+
+async function loadStoreInfo() {
+    try {
+        const response = await fetch(`${PUBLIC_API}/loja`);
+        if (!response.ok) return;
+        const { data = {} } = await response.json();
+        const address = [data.endereco, data.numero, data.complemento, data.bairro,
+            data.cidade, data.estado, data.cep].filter(Boolean).join(", ");
+        document.querySelectorAll("[data-store-name]").forEach(item => { item.textContent = data.nome || "PetFlow"; });
+        document.querySelectorAll("[data-store-phone]").forEach(item => { item.textContent = data.telefone || "Telefone não informado"; });
+        document.querySelectorAll("[data-store-email]").forEach(item => { item.textContent = data.email || "E-mail não informado"; });
+        document.querySelectorAll("[data-store-address]").forEach(item => { item.textContent = address || "Endereço não informado"; });
+        document.querySelectorAll("[data-store-cnpj]").forEach(item => { item.textContent = data.cnpj ? `CNPJ ${data.cnpj}` : "CNPJ não informado"; });
+    } catch {
+        // O rodape permanece sem inventar dados quando a configuracao nao puder ser carregada.
+    }
+}
 
 async function loadPublicCatalog() {
     const grid = document.querySelector(".products-grid");
@@ -40,19 +58,10 @@ async function loadPublicCatalog() {
             return;
         }
 
-        publicProducts = collectStaticProducts();
-        prepareStaticProductCards();
-        bindProductActions();
-        syncProductButtons();
-        applyPublicSearch(getSearchValue(), false);
-        updateHeaderCounters();
+        grid.innerHTML = '<div class="public-empty">Nenhum produto ativo foi cadastrado ainda.</div>';
     } catch {
-        publicProducts = collectStaticProducts();
-        prepareStaticProductCards();
-        bindProductActions();
-        syncProductButtons();
-        applyPublicSearch(getSearchValue(), false);
-        updateHeaderCounters();
+        publicProducts = [];
+        grid.innerHTML = '<div class="public-empty">Não foi possível carregar os produtos. Atualize a página em alguns instantes.</div>';
     }
 }
 
@@ -272,46 +281,6 @@ function bindProductActions() {
     });
 }
 
-function collectStaticProducts() {
-    return [...document.querySelectorAll(".product-card")].map(card => {
-        const name = card.querySelector(".product-title")?.textContent.trim();
-
-        return {
-            id: slugifyStaticProduct(name),
-            nome: name,
-            descricao: card.querySelector(".product-description")?.textContent.trim(),
-            categoria: card.querySelector(".product-category")?.textContent.trim(),
-            preco: card.querySelector(".product-price")?.textContent.replace(/[^\d,]/g, "").replace(",", "."),
-            foto: card.querySelector(".product-image")?.getAttribute("src")
-        };
-    }).filter(item => item.nome);
-}
-
-function prepareStaticProductCards() {
-    document.querySelectorAll(".product-card").forEach(card => {
-        const title = card.querySelector(".product-title")?.textContent.trim();
-        const id = slugifyStaticProduct(title);
-
-        if (!id) {
-            return;
-        }
-
-        card.dataset.productCard = "true";
-        card.dataset.id = id;
-
-        const addButton = card.querySelector(".cart-action.add");
-        const favoriteButton = card.querySelector(".cart-action.favorite");
-
-        if (addButton && !addButton.dataset.action) {
-            addButton.dataset.action = "toggle-cart";
-        }
-
-        if (favoriteButton && !favoriteButton.dataset.action) {
-            favoriteButton.dataset.action = "toggle-favorite";
-        }
-    });
-}
-
 function syncProductButtons() {
     document.querySelectorAll("[data-product-card]").forEach(card => {
         const id = card.dataset.id;
@@ -336,12 +305,6 @@ function syncProductButtons() {
             `;
         }
     });
-}
-
-function slugifyStaticProduct(value) {
-    return normalize(value)
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/(^-|-$)/g, "");
 }
 
 function currentVisibleProducts() {

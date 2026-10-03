@@ -5,6 +5,7 @@
 ================================================== */
 
 const empresaModel = require("../models/empresaModel");
+const audit = require("../services/auditService");
 
 /* ==================================================
    BUSCAR EMPRESA
@@ -56,6 +57,8 @@ async function update(request, response, next) {
 
     try {
 
+        const anterior = await empresaModel.findById(request.user.empresaId);
+
         const empresa = await empresaModel.update(
 
             request.user.empresaId,
@@ -64,11 +67,14 @@ async function update(request, response, next) {
 
                 ...request.body,
 
-                logo: request.file?.path || request.body.logo
+                logo: request.file?.path || anterior?.logo || null
 
             }
 
         );
+
+        await audit.registrar({ ...audit.requestMeta(request), acao: "EDITAR", entidade: "EMPRESA",
+            entidadeId: empresa.id, descricao: "Configurações da loja atualizadas.", anterior, novo: empresa });
 
         return response.status(200).json({
 

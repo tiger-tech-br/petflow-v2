@@ -8,14 +8,20 @@ require("dotenv").config();
 
 const pool = new Pool(buildDbOptions());
 
-const admin = {
-    nome: "Admin",
-    email: process.env.ADMIN_EMAIL || "admin@petflow.com.br",
-    senha: process.env.ADMIN_PASSWORD || "Admin@123",
-    perfil: "ADMIN"
-};
-
 async function run() {
+    const admin = {
+        nome: String(process.env.ADMIN_NAME || "Administrador").trim(),
+        email: String(process.env.ADMIN_EMAIL || "").trim().toLowerCase(),
+        senha: String(process.env.ADMIN_PASSWORD || ""),
+        perfil: "ADMIN"
+    };
+    if (!admin.email || !/^\S+@\S+\.\S+$/.test(admin.email)) {
+        throw new Error("Configure ADMIN_EMAIL com um e-mail valido antes de executar o seed.");
+    }
+    if (admin.senha.length < 12 || !/[a-z]/.test(admin.senha) ||
+        !/[A-Z]/.test(admin.senha) || !/\d/.test(admin.senha) || !/[^A-Za-z0-9]/.test(admin.senha)) {
+        throw new Error("Configure ADMIN_PASSWORD com ao menos 12 caracteres, incluindo maiuscula, minuscula, numero e simbolo.");
+    }
     const senhaHash = await bcrypt.hash(admin.senha, 10);
 
     const { rows } = await pool.query(
@@ -55,8 +61,6 @@ async function run() {
 
     console.log("Usuario admin pronto:");
     console.log(rows[0]);
-    console.log(`Email: ${admin.email}`);
-    console.log(`Senha: ${admin.senha}`);
 }
 
 run()

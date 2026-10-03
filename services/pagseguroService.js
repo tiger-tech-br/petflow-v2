@@ -80,7 +80,7 @@ async function cancelarCobranca(chargeId, valor, idempotencyKey) {
     try {
         const { data } = await client.post(
             `/charges/${encodeURIComponent(chargeId)}/cancel`,
-            { amount: { value: toCents(valor), currency: "BRL" } },
+            { amount: { value: toCents(valor) } },
             { headers: { "x-idempotency-key": String(idempotencyKey || chargeId).slice(0, 100) } }
         );
         return { id: data?.id || chargeId, status: data?.status || "CANCELED", raw: data };
@@ -103,8 +103,11 @@ function buildCheckoutPayload(pedido) {
         throw error;
     }
 
+    const expirationDate = buildExpirationDate(pedido.reserva_expira_em);
+
     return {
         reference_id: String(pedido.id),
+        ...(expirationDate ? { expiration_date: expirationDate } : {}),
         customer_modifiable: true,
         additional_amount: toCents(pedido.acrescimo),
         discount_amount: toCents(pedido.desconto),
@@ -132,6 +135,14 @@ function buildCheckoutPayload(pedido) {
             address_modifiable: false
         }
     };
+}
+
+function buildExpirationDate(value) {
+    const date = value ? new Date(value) : null;
+    if (!date || Number.isNaN(date.getTime()) || date.getTime() <= Date.now()) {
+        return undefined;
+    }
+    return date.toISOString();
 }
 
 function getAppUrl() {

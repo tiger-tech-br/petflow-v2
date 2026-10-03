@@ -87,7 +87,13 @@ test("cadastro, confirmação, compra, webhook e estoque em PostgreSQL isolado",
             const res = await fetch(base + path, { method, headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}), ...headers }, ...(body ? { body: JSON.stringify(body) } : {}) });
             return { status: res.status, body: await res.json(), headers: res.headers };
         }
-        const customer = { nome: "Teste Isolado", cpf: "52998224725", telefone: "11999999999", email: "integration@example.invalid", senha: "Teste12345", cep: "01001000", endereco: "Rua de Teste", numero: "10", bairro: "Centro", cidade: "São Paulo", estado: "SP" };
+        const storeInfo = await request("/api/public/loja");
+        assert.equal(storeInfo.status, 200);
+        assert.ok(storeInfo.body.data.nome, "Dados publicos da loja usam a empresa cadastrada");
+        assert.equal((await request("/api/health")).status, 200);
+        const customer = { nome: "Teste Isolado", cpf: "52998224725", telefone: "11999999999", email: "integration@example.invalid", senha: "Teste12345", cep: "01001000", endereco: "Rua de Teste", numero: "10", bairro: "Centro", cidade: "São Paulo", estado: "SP", aceite_privacidade: true };
+        assert.equal((await request("/api/public/clientes/cadastro", "POST", { ...customer, aceite_privacidade: false })).status, 400,
+            "Cadastro exige aceite expresso da politica de privacidade");
         let res = await request("/api/public/clientes/cadastro", "POST", customer);
         assert.equal(res.status, 503);
         assert.equal((await pool.query("SELECT COUNT(*)::int AS n FROM clientes")).rows[0].n, 0, "Envio falhou: nenhum cliente órfão");
@@ -168,11 +174,24 @@ test("cadastro, confirmação, compra, webhook e estoque em PostgreSQL isolado",
         assert.equal(Number((await pool.query("SELECT quantidade FROM estoque WHERE produto_id=$1",[product])).rows[0].quantidade),8);
         const jwt = require("jsonwebtoken");
         const adminToken = jwt.sign({ id: adminId, empresaId, cargo: "ADMIN" }, process.env.JWT_SECRET);
+        const exported = await request("/api/public/clientes/me/dados", "GET", null, token);
+        assert.equal(exported.status, 200);
+        assert.equal(exported.body.consentimentos.length, 1, "Exportacao inclui o aceite LGPD");
+        const privacyRequest = await request("/api/public/clientes/me/solicitacoes-lgpd", "POST",
+            { tipo: "INFORMACAO", detalhes: "Informar com quem meus dados foram compartilhados." }, token);
+        assert.equal(privacyRequest.status, 201, JSON.stringify(privacyRequest.body));
+        const privacyList = await request("/api/lgpd", "GET", null, adminToken);
+        assert.equal(privacyList.status, 200);
+        const privacyItem = privacyList.body.data.find(item => item.protocolo === privacyRequest.body.data.protocolo);
+        assert.ok(privacyItem, "Solicitacao LGPD aparece no painel administrativo");
+        assert.equal((await request(`/api/lgpd/${privacyItem.id}`, "PUT",
+            { status: "ATENDIDA", resposta: "Relacao de operadores disponibilizada ao titular." }, adminToken)).status, 200);
         const noticesPath = "/api/dashboard/notificacoes";
         assert.equal((await request(noticesPath)).status, 401);
         assert.equal((await request(noticesPath, "GET", null, token)).status, 403);
         const notices = (await request(noticesPath, "GET", null, adminToken)).body.data;
-        assert.equal(notices.filter(n => n.cliente_id && !n.venda_id).length, 1, "Novo cadastro gera aviso persistente");
+        assert.equal(notices.filter(n => n.titulo === "Novo cliente cadastrado").length, 1, "Novo cadastro gera aviso persistente");
+        assert.equal(notices.filter(n => n.titulo === "Nova solicitação LGPD").length, 1, "Solicitacao LGPD gera aviso persistente");
         assert.equal(notices.filter(n => n.venda_id).length, 2, "Preserva avisos de novos pedidos");
         assert.ok(notices.every(n => !n.lida));
         assert.equal((await request(noticesPath + "/lidas", "PATCH", { ids: [notices[0].id] }, adminToken)).status, 200);

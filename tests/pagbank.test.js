@@ -2,8 +2,8 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 require.cache[require.resolve("../config/env")] = { exports: { APP_URL:"https://petflow.example", PAGSEGURO_BASE_URL:"https://sandbox.api.pagseguro.com", PAGSEGURO_TOKEN:"test", JWT_SECRET:"test" } };
-let sent;
-require("axios").create = () => ({ post:async (url,body)=>{sent=body;return {data:{id:"CHEC_TEST",reference_id:"local-order",links:[{rel:"PAY",href:"https://example.invalid/pay"}]}};} });
+let sent, sentUrl, sentConfig;
+require("axios").create = () => ({ post:async (url,body,config)=>{sentUrl=url;sent=body;sentConfig=config;return {data:{id:"CHEC_TEST",reference_id:"local-order",links:[{rel:"PAY",href:"https://example.invalid/pay"}]}};} });
 const service = require("../services/pagseguroService");
 test("checkout envia preço, frete, desconto e acréscimo em centavos e preserva endereço", async () => {
     const result = await service.criarCheckout({id:"local-order",acrescimo:2,desconto:1.5,valor_frete:3,
@@ -25,6 +25,17 @@ test("webhooks distinguem identificador de checkout e identificador do pagamento
     assert.equal(service.extrairEventoWebhook({id:"CHEC_TEST",reference_id:"order",status:"EXPIRED"}).orderId,null);
     assert.equal(service.extrairEventoWebhook({id:"ORDE_TEST",reference_id:"order",charges:[{status:"PAID"}]}).orderId,"ORDE_TEST");
     assert.equal(service.mapStatusToVenda("AUTHORIZED"),"AGUARDANDO_PAGAMENTO");
+});
+test("checkout expira junto com a reserva e estorno usa o contrato oficial da cobranca", async () => {
+    const expires = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    await service.criarCheckout({ id:"reserved", reserva_expira_em:expires, cliente:{},
+        itens:[{preco_unitario:10,quantidade:1}], valor_frete:0 });
+    assert.equal(sent.expiration_date, expires);
+
+    await service.cancelarCobranca("CHAR_TEST", 12.34, "cancel-order");
+    assert.equal(sentUrl, "/charges/CHAR_TEST/cancel");
+    assert.deepEqual(sent, { amount: { value: 1234 } });
+    assert.equal(sentConfig.headers["x-idempotency-key"], "cancel-order");
 });
 test("expiração de checkout não cancela pedido pago nem em entrega; cancelamento transacional permanece", async () => {
     require.cache[require.resolve("../database/connection")] = { exports:{} };

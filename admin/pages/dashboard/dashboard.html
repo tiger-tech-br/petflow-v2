@@ -36,6 +36,10 @@
                 <a href="/admin/pages/compras/compras.html"><i class="fa-solid fa-bag-shopping"></i>Compras</a>
                 <a href="/admin/pages/vendas/vendas.html"><i class="fa-solid fa-box-open"></i>Pedidos</a>
                 <a href="/admin/pages/financeiro/financeiro.html"><i class="fa-solid fa-wallet"></i>Financeiro</a>
+                <a href="/admin/pages/cupons/cupons.html"><i class="fa-solid fa-ticket"></i>Cupons</a>
+                <a href="/admin/pages/usuarios/usuarios.html"><i class="fa-solid fa-user-shield"></i>Usuários</a>
+                <a href="/admin/pages/auditoria/auditoria.html"><i class="fa-solid fa-clock-rotate-left"></i>Auditoria</a>
+                <a href="/admin/pages/lgpd/lgpd.html"><i class="fa-solid fa-shield-halved"></i>LGPD</a>
                 <a href="/admin/pages/configuracoes/configuracoes.html"><i class="fa-solid fa-gear"></i>Configurações</a>
             </nav>
         </aside>
@@ -73,13 +77,7 @@
                                 <small id="notificationStatus">Nenhuma nova</small>
                             </div>
                             <div class="notification-list" id="notificationList">
-                                <article>
-                                    <i class="fa-solid fa-bag-shopping"></i>
-                                    <div>
-                                        <strong>Pedido #1049 recebido</strong>
-                                        <span>Ração Premium + petiscos. Aguardando separação.</span>
-                                    </div>
-                                </article>
+                                <div class="dashboard-empty">Carregando notificações...</div>
                             </div>
                         </div>
                     </div>
@@ -111,37 +109,37 @@
                     <article class="metric-card">
                         <div>
                             <span>Faturamento hoje</span>
-                            <strong>R$ 2.840,00</strong>
+                            <strong>—</strong>
                         </div>
                         <i class="fa-solid fa-sack-dollar"></i>
-                        <small class="trend-up">+18% vs. ontem</small>
+                        <small>Carregando dados reais...</small>
                     </article>
 
                     <article class="metric-card">
                         <div>
                             <span>Pedidos recebidos</span>
-                            <strong>42</strong>
+                            <strong>—</strong>
                         </div>
                         <i class="fa-solid fa-bag-shopping"></i>
-                        <small class="trend-up">12 aguardando separação</small>
+                        <small>Carregando dados reais...</small>
                     </article>
 
                     <article class="metric-card">
                         <div>
                             <span>Entregas hoje</span>
-                            <strong>16</strong>
+                            <strong>—</strong>
                         </div>
                         <i class="fa-solid fa-truck-fast"></i>
-                        <small>4 em rota</small>
+                        <small>Carregando dados reais...</small>
                     </article>
 
                     <article class="metric-card">
                         <div>
                             <span>Reposição pendente</span>
-                            <strong>7</strong>
+                            <strong>—</strong>
                         </div>
                         <i class="fa-solid fa-box-open"></i>
-                        <small class="trend-alert">3 fornecedores acionados</small>
+                        <small>Carregando dados reais...</small>
                     </article>
                 </section>
 
@@ -154,18 +152,7 @@
                             <a href="/admin/pages/vendas/vendas.html">Ver pedidos</a>
                         </div>
                         <div class="sales-list">
-                            <article>
-                                <span>Pedido #1048 - Ração Premium</span>
-                                <strong>Pago</strong>
-                            </article>
-                            <article>
-                                <span>Pedido #1047 - Kit Saúde Pet</span>
-                                <strong>Separação</strong>
-                            </article>
-                            <article>
-                                <span>Pedido #1046 - Coleira Fred10</span>
-                                <strong>Entrega</strong>
-                            </article>
+                            <div class="dashboard-empty">Carregando pedidos...</div>
                         </div>
                     </section>
                 </div>
@@ -176,22 +163,7 @@
                         <a href="/admin/pages/fornecedores/fornecedores.html">Ver fornecedores</a>
                     </div>
                     <div class="supplier-list">
-                        <article>
-                            <i class="fa-solid fa-truck-field"></i>
-                            <div>
-                                <strong>PetNutri Distribuidora</strong>
-                                <span>Rações premium abaixo do estoque mínimo.</span>
-                            </div>
-                            <a href="/admin/pages/compras/compras.html">Criar compra</a>
-                        </article>
-                        <article>
-                            <i class="fa-solid fa-prescription-bottle-medical"></i>
-                            <div>
-                                <strong>VitaPet Care</strong>
-                                <span>Reposição de itens de higiene.</span>
-                            </div>
-                            <a href="/admin/pages/estoque/estoque.html">Ver estoque</a>
-                        </article>
+                        <div class="dashboard-empty">Carregando estoque e compras...</div>
                     </div>
                 </section>
 

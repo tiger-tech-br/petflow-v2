@@ -5,6 +5,7 @@
 ================================================== */
 
 const categoriaModel = require("../models/categoriaModel");
+const audit = require("../services/auditService");
 
 /* ==================================================
    LISTAR
@@ -98,6 +99,9 @@ async function store(request, response, next) {
 
         });
 
+        await audit.registrar({ ...audit.requestMeta(request), acao: "CRIAR", entidade: "CATEGORIA",
+            entidadeId: categoria.id, descricao: `Categoria ${categoria.nome} cadastrada.`, novo: categoria });
+
         return response.status(201).json({
 
             success: true,
@@ -126,6 +130,9 @@ async function update(request, response, next) {
 
         const { id } = request.params;
 
+        const anterior = await categoriaModel.findById(id, request.user.empresaId);
+        if (!anterior) return response.status(404).json({ success: false, message: "Categoria não encontrada." });
+
         const categoria = await categoriaModel.update(
 
             id,
@@ -135,6 +142,9 @@ async function update(request, response, next) {
             request.user.empresaId
 
         );
+
+        await audit.registrar({ ...audit.requestMeta(request), acao: "EDITAR", entidade: "CATEGORIA",
+            entidadeId: id, descricao: `Categoria ${categoria.nome} atualizada.`, anterior, novo: categoria });
 
         return response.status(200).json({
 
@@ -164,6 +174,9 @@ async function destroy(request, response, next) {
 
         const { id } = request.params;
 
+        const anterior = await categoriaModel.findById(id, request.user.empresaId);
+        if (!anterior) return response.status(404).json({ success: false, message: "Categoria não encontrada." });
+
         await categoriaModel.remove(
 
             id,
@@ -171,6 +184,9 @@ async function destroy(request, response, next) {
             request.user.empresaId
 
         );
+
+        await audit.registrar({ ...audit.requestMeta(request), acao: "DESATIVAR", entidade: "CATEGORIA",
+            entidadeId: id, descricao: `Categoria ${anterior.nome} desativada.`, anterior });
 
         return response.status(200).json({
 
