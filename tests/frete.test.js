@@ -73,6 +73,24 @@ test("CEP preenche endereço; CEP inexistente e falha do provedor têm mensagens
     await assert.rejects(shipping.consultarCep("09000000"), { status: 503 });
 });
 
+test("CEP usa BrasilAPI quando o ViaCEP está indisponível", async () => {
+    const requested = [];
+    global.fetch = async url => {
+        requested.push(url);
+        if (url.includes("viacep.com.br")) throw new Error("timeout");
+        assert.equal(url, "https://brasilapi.com.br/api/cep/v2/09060700");
+        return { ok: true, status: 200, json: async () => ({
+            cep: "09060700", street: "Rua Brasílio Machado", neighborhood: "Vila Príncipe de Gales",
+            city: "Santo André", state: "SP"
+        }) };
+    };
+    assert.deepEqual(await shipping.consultarCep("09060-700"), {
+        cep: "09060700", endereco: "Rua Brasílio Machado", bairro: "Vila Príncipe de Gales",
+        cidade: "Santo André", estado: "SP"
+    });
+    assert.equal(requested.length, 2);
+});
+
 test("aceita GOOGLE_API_KEY configurada no Railway quando a variável principal está vazia", async () => {
     process.env.GOOGLE_MAPS_API_KEY = " ";
     process.env.GOOGLE_API_KEY = "alias-test-key";

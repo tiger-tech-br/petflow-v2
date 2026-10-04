@@ -14,6 +14,8 @@ let couponLoading = false;
 let couponRevision = 0;
 let shippingRevision = 0;
 let automaticShippingTimer = null;
+let cepLookupTimer = null;
+let cepLookupController = null;
 let cepRevision = 0;
 const deliveryFields = { cep: "deliveryCep", endereco: "deliveryStreet", numero: "deliveryNumber", complemento: "deliveryComplement", bairro: "deliveryDistrict", cidade: "deliveryCity", estado: "deliveryState" };
 const embeddedCart = window.parent !== window && new URLSearchParams(location.search).get("sidebar") === "1";
@@ -97,14 +99,22 @@ function setupCartEvents() {
     }
     document.getElementById("shippingForm").addEventListener("submit", event => { event.preventDefault(); calculateShipping(); });
     document.getElementById("lookupCep").addEventListener("click", lookupDeliveryCep);
-    document.getElementById("deliveryCep").addEventListener("blur", lookupDeliveryCep);
+    document.getElementById("deliveryCep").addEventListener("keydown", event => {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            lookupDeliveryCep();
+        }
+    });
     document.getElementById("shippingForm").addEventListener("input", event => {
         if (submitting) return;
         if (event.target.id === "deliveryCep") {
+            clearTimeout(cepLookupTimer);
+            cepLookupController?.abort();
             const digits = event.target.value.replace(/\D/g, "").slice(0, 8);
             event.target.value = digits.replace(/^(\d{5})(\d)/, "$1-$2");
             ++cepRevision;
             for (const id of ["deliveryStreet", "deliveryDistrict", "deliveryCity", "deliveryState"]) document.getElementById(id).value = "";
+            if (digits.length === 8) cepLookupTimer = setTimeout(lookupDeliveryCep, 600);
         }
         invalidateShipping();
         sessionStorage.setItem("petflow_delivery_address", JSON.stringify(readDeliveryAddress()));
@@ -366,13 +376,18 @@ function invalidateShipping() {
 
 async function lookupDeliveryCep() {
     if (submitting) return;
+    clearTimeout(cepLookupTimer);
     const cep = document.getElementById("deliveryCep").value.replace(/\D/g, "");
     const status = document.getElementById("cepStatus");
     if (!/^\d{8}$/.test(cep)) { status.textContent = "Informe um CEP com 8 dígitos."; return; }
+    cepLookupController?.abort();
+    const controller = new AbortController();
+    cepLookupController = controller;
+    const timeout = setTimeout(() => controller.abort(), 15000);
     const revision = ++cepRevision;
     status.textContent = "Buscando endereço...";
     try {
-        const response = await fetch(`${CART_API}/frete/cep/${cep}`, { signal: AbortSignal.timeout(10000) });
+        const response = await fetch(`${CART_API}/frete/cep/${cep}`, { signal: controller.signal });
         const payload = await response.json();
         if (revision !== cepRevision) return;
         if (!response.ok) throw new Error(payload.message || "Não foi possível consultar o CEP.");
@@ -382,8 +397,16 @@ async function lookupDeliveryCep() {
         invalidateShipping();
         sessionStorage.setItem("petflow_delivery_address", JSON.stringify(readDeliveryAddress()));
         status.textContent = payload.data.endereco ? "Endereço encontrado. Confira e informe o número." : "CEP encontrado. Complete a rua, o bairro e o número.";
+        document.getElementById(payload.data.endereco ? "deliveryNumber" : "deliveryStreet").focus();
         scheduleAutomaticShipping();
-    } catch (error) { if (revision === cepRevision) status.textContent = error.message || "Preencha o endereço manualmente ou tente novamente."; }
+    } catch (error) {
+        if (revision === cepRevision) status.textContent = error.name === "AbortError"
+            ? "A consulta demorou demais. Tente novamente ou preencha o endereço manualmente."
+            : (error.message || "Preencha o endereço manualmente ou tente novamente.");
+    } finally {
+        clearTimeout(timeout);
+        if (cepLookupController === controller) cepLookupController = null;
+    }
 }
 
 function renderEmpty(message) {

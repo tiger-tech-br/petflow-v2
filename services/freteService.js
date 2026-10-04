@@ -72,14 +72,54 @@ function verifyQuote(token, customer) {
 async function consultarCep(value) {
     const cep = String(value || "").replace(/\D/g, "");
     if (!/^\d{8}$/.test(cep)) throw error("Informe um CEP com 8 dígitos.");
-    let response, data;
-    try {
-        response = await fetch(`https://viacep.com.br/ws/${cep}/json/`, { signal: AbortSignal.timeout(8000) });
-        if (!response.ok) throw new Error("CEP indisponível");
-        data = await response.json();
-    } catch { throw error("Não foi possível buscar o CEP. Preencha o endereço manualmente ou tente novamente.", 503); }
-    if (data.erro) throw error("CEP não encontrado. Confira os números informados.", 404);
-    if (!data.localidade || !data.uf) throw error("Não foi possível identificar esse CEP.", 422);
-    return { cep, endereco: data.logradouro || "", bairro: data.bairro || "", cidade: data.localidade, estado: data.uf };
+    const providers = [
+        {
+            name: "ViaCEP",
+            url: `https://viacep.com.br/ws/${cep}/json/`,
+            normalize: data => data?.erro ? null : ({
+                cep,
+                endereco: data?.logradouro || "",
+                bairro: data?.bairro || "",
+                cidade: data?.localidade || "",
+                estado: data?.uf || ""
+            })
+        },
+        {
+            name: "BrasilAPI",
+            url: `https://brasilapi.com.br/api/cep/v2/${cep}`,
+            normalize: data => ({
+                cep,
+                endereco: data?.street || "",
+                bairro: data?.neighborhood || "",
+                cidade: data?.city || "",
+                estado: data?.state || ""
+            })
+        }
+    ];
+    let notFound = false;
+    for (const provider of providers) {
+        try {
+            const response = await fetch(provider.url, {
+                signal: AbortSignal.timeout(6000),
+                headers: { Accept: "application/json", "User-Agent": "PetFlow/1.0" }
+            });
+            if (response.status === 400 || response.status === 404) {
+                notFound = true;
+                continue;
+            }
+            if (!response.ok) continue;
+            const address = provider.normalize(await response.json());
+            if (!address) {
+                notFound = true;
+                continue;
+            }
+            address.estado = String(address.estado || "").toUpperCase();
+            if (address.cidade && /^[A-Z]{2}$/.test(address.estado)) return address;
+        } catch (providerError) {
+            console.warn(`[frete] ${provider.name} indisponível para consulta de CEP.`, providerError?.name || "erro");
+        }
+    }
+    if (notFound) throw error("CEP não encontrado. Confira os números informados ou preencha o endereço manualmente.", 404);
+    throw error("Não foi possível buscar o CEP agora. Preencha o endereço manualmente ou tente novamente.", 503);
 }
 module.exports = { quote, verifyQuote, priceForDistance, addressSnapshot, validateAddress, consultarCep };
