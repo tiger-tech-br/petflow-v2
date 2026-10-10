@@ -133,13 +133,15 @@ async function create(produto) {
 
                 foto,
 
+                foto_public_id,
+
                 status
 
             )
 
             VALUES (
 
-                $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,TRUE
+                $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,TRUE
 
             )
 
@@ -166,7 +168,9 @@ async function create(produto) {
 
             produto.custo,
 
-            produto.foto
+            produto.foto,
+
+            produto.fotoPublicId || null
 
         ]
 
@@ -181,73 +185,33 @@ async function create(produto) {
 ================================================== */
 
 async function update(id, produto, empresaId) {
-
     const result = await db.query(
-
-        `
-            UPDATE produtos
-
-            SET
-
-                categoria_id = $1,
-
-                fornecedor_id = $2,
-
-                nome = $3,
-
-                descricao = $4,
-
-                sku = $5,
-
-                codigo_barras = $6,
-
-                preco = $7,
-
-                custo = $8,
-
-                foto = $9,
-
-                updated_at = NOW()
-
-            WHERE
-
-                id = $10
-
-            AND empresa_id = $11
-
-            RETURNING *
-        `,
-
-        [
-
-            produto.categoriaId,
-
-            produto.fornecedorId || produto.fornecedor_id || null,
-
-            produto.nome,
-
-            produto.descricao,
-
-            produto.sku,
-
-            produto.codigoBarras,
-
-            produto.preco,
-
-            produto.custo,
-
-            produto.foto,
-
-            id,
-
-            empresaId
-
-        ]
-
+        `WITH previous AS (
+            SELECT id, foto, foto_public_id FROM produtos
+            WHERE id = $11 AND empresa_id = $12 FOR UPDATE
+        )
+        UPDATE produtos p SET
+            categoria_id = $1, fornecedor_id = $2, nome = $3, descricao = $4,
+            sku = $5, codigo_barras = $6, preco = $7, custo = $8,
+            foto = CASE WHEN $13::boolean THEN $9::text ELSE p.foto END,
+            foto_public_id = CASE WHEN $13::boolean THEN $10::text ELSE p.foto_public_id END,
+            updated_at = NOW()
+        FROM previous WHERE p.id = previous.id AND p.empresa_id = $12
+        RETURNING p.*, previous.foto AS previous_foto,
+                  previous.foto_public_id AS previous_foto_public_id`,
+        [produto.categoriaId, produto.fornecedorId || produto.fornecedor_id || null,
+            produto.nome, produto.descricao, produto.sku, produto.codigoBarras,
+            produto.preco, produto.custo, produto.foto, produto.fotoPublicId || null,
+            id, empresaId, Boolean(produto.replaceImage)]
     );
-
-    return result.rows[0];
-
+    const row = result.rows[0];
+    if (row) {
+        const previousImage = { url: row.previous_foto, publicId: row.previous_foto_public_id };
+        delete row.previous_foto;
+        delete row.previous_foto_public_id;
+        Object.defineProperty(row, "previousImage", { value: previousImage });
+    }
+    return row || null;
 }
 
 /* ==================================================

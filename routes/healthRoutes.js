@@ -2,14 +2,8 @@
 
 const router = require("express").Router();
 const db = require("../database/connection");
-
-const REQUIRED_INTEGRATIONS = {
-    email: ["RESEND_API_KEY", "EMAIL_FROM"],
-    pagamento: ["PAGSEGURO_BASE_URL", "PAGSEGURO_TOKEN"],
-    frete: ["GOOGLE_MAPS_API_KEY"],
-    mapa: ["GOOGLE_MAPS_BROWSER_API_KEY"],
-    imagens: ["CLOUDINARY_CLOUD_NAME", "CLOUDINARY_API_KEY", "CLOUDINARY_API_SECRET"]
-};
+const { isCloudinaryConfigured } = require("../config/cloudinary");
+const { REQUIRED_MIGRATIONS, productionConfigurationChecks, configurationStatus } = require("../config/productionReadiness");
 
 router.get("/health", async (_request, response) => {
     try {
@@ -34,21 +28,13 @@ router.get("/health", async (_request, response) => {
 });
 
 router.get("/readiness", async (_request, response) => {
-    const integrations = Object.fromEntries(
-        Object.entries(REQUIRED_INTEGRATIONS).map(([name, variables]) => [
-            name,
-            variables.every(variable => Boolean(String(process.env[variable] || "").trim()))
-        ])
-    );
+    const checks = productionConfigurationChecks(process.env, { cloudinaryConfigured: isCloudinaryConfigured() });
+    const integrations = configurationStatus(checks);
     const configurationReady = Object.values(integrations).every(Boolean);
-
     try {
-        const { rows } = await db.query(`
-            SELECT EXISTS (
-                SELECT 1 FROM schema_migrations WHERE nome = '112_atendimento_consumidor.sql'
-            ) AS latest_migration
-        `);
-        const databaseReady = rows[0]?.latest_migration === true;
+        const { rows } = await db.query("SELECT nome FROM schema_migrations WHERE nome = ANY($1::text[])", [REQUIRED_MIGRATIONS]);
+        const applied = new Set(rows.map(row => row.nome));
+        const databaseReady = REQUIRED_MIGRATIONS.every(name => applied.has(name));
         const ready = configurationReady && databaseReady;
         return response.status(ready ? 200 : 503).json({
             success: ready,

@@ -4,7 +4,15 @@
    MIDDLEWARE DE ERRO
 ================================================== */
 
+const { MulterError } = require("multer");
+
 function errorMiddleware(error, request, response, next) {
+    if (error instanceof MulterError) {
+        error.status = error.code === "LIMIT_FILE_SIZE" ? 413 : 400;
+        error.message = error.code === "LIMIT_FILE_SIZE"
+            ? "A imagem excede o limite de tamanho permitido."
+            : "Upload inválido. Envie apenas uma imagem no campo correto.";
+    }
 
     const candidate = error.status || error.statusCode;
     const status = Number.isInteger(candidate) && candidate >= 400 && candidate <= 599 ? candidate : 500;
@@ -20,7 +28,7 @@ function errorMiddleware(error, request, response, next) {
         });
     }
 
-    const message = status >= 500 && process.env.NODE_ENV === "production"
+    const message = status >= 500 && process.env.NODE_ENV === "production" && !error.expose
         ? "Erro interno do servidor. Tente novamente em alguns minutos."
         : (error.message || "Erro interno do servidor.");
 

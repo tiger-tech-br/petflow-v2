@@ -6,6 +6,7 @@
 
 const produtoModel = require("../models/produtoModel");
 const audit = require("../services/auditService");
+const images = require("../services/imageService");
 
 /* ==================================================
    LISTAR
@@ -89,9 +90,11 @@ async function show(request, response, next) {
 
 async function store(request, response, next) {
 
+    let image = null;
+    let saved = false;
     try {
 
-        if (!request.file?.path) {
+        if (!request.file?.buffer?.length) {
 
             return response.status(400).json({
 
@@ -103,16 +106,19 @@ async function store(request, response, next) {
 
         }
 
+        image = await images.uploadImage(request.file);
         const produto = await produtoModel.create({
 
             ...request.body,
 
             empresaId: request.user.empresaId,
 
-            foto: request.file?.path || null
+            foto: image.url,
+            fotoPublicId: image.publicId
 
         });
 
+        saved = true;
         await audit.registrar({ ...audit.requestMeta(request), acao: "CRIAR", entidade: "PRODUTO",
             entidadeId: produto.id, descricao: `Produto ${produto.nome} cadastrado.`, novo: produto });
 
@@ -128,6 +134,7 @@ async function store(request, response, next) {
 
     } catch (error) {
 
+        if (image && !saved) await images.removeImageSafely(image.publicId);
         next(error);
 
     }
@@ -140,6 +147,8 @@ async function store(request, response, next) {
 
 async function update(request, response, next) {
 
+    let image = null;
+    let saved = false;
     try {
 
         const { id } = request.params;
@@ -164,6 +173,7 @@ async function update(request, response, next) {
 
         }
 
+        image = await images.uploadImage(request.file);
         const produto = await produtoModel.update(
 
             id,
@@ -172,7 +182,9 @@ async function update(request, response, next) {
 
                 ...request.body,
 
-                foto: request.file?.path || existente.foto
+                foto: image?.url || existente.foto,
+                fotoPublicId: image?.publicId || existente.foto_public_id || null,
+                replaceImage: Boolean(image)
 
             },
 
@@ -180,6 +192,12 @@ async function update(request, response, next) {
 
         );
 
+        if (!produto) throw Object.assign(new Error("Produto não encontrado."), { status: 404 });
+        saved = true;
+        if (image) {
+            const previous = produto.previousImage || { url: existente.foto, publicId: existente.foto_public_id };
+            await images.removeImageSafely(images.getImagePublicId(previous.url, previous.publicId));
+        }
         await audit.registrar({ ...audit.requestMeta(request), acao: "EDITAR", entidade: "PRODUTO",
             entidadeId: id, descricao: `Produto ${produto.nome} atualizado.`, anterior: existente, novo: produto });
 
@@ -195,6 +213,7 @@ async function update(request, response, next) {
 
     } catch (error) {
 
+        if (image && !saved) await images.removeImageSafely(image.publicId);
         next(error);
 
     }

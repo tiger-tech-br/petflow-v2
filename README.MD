@@ -1,5 +1,7 @@
 # PetFlow v2 — loja de produtos
 
+Para instalação e entrega comercial, consulte [o guia do comprador](docs/entrega-comercial.md). Para validar uploads, consulte [Cloudinary](docs/cloudinary.md). Instale Node.js 22 ou superior, execute `npm ci` e copie `.env.example` para `.env` antes de configurar o banco e as integrações.
+
 Versão voltada a um petshop com venda de produtos. Mantém catálogo, sacola,
 conta do cliente, pedidos, pagamentos, clientes, produtos, estoque, fornecedores,
 compras e financeiro. Serviços, agenda, cadastro de pets e módulo de funcionários não
@@ -49,8 +51,7 @@ o banco criado naquele projeto, mesmo que o Railway use o nome padrão
 Não use `DATABASE_PUBLIC_URL` entre a aplicação e o PostgreSQL. O arquivo
 `railway.json` executa `npm run db:migrate` antes de cada deploy. Ainda é
 necessário definir no Railway `JWT_SECRET`, `JWT_EXPIRES_IN`, `APP_URL` e
-`FRONTEND_URL`. Cloudinary é necessário apenas para upload de imagens; Resend
-e PagBank são necessários quando e-mail e pagamentos forem ativados.
+`FRONTEND_URL`. Cloudinary atende os uploads de imagens; Resend é necessário para cadastro e recuperação de senha, e PagBank para concluir pagamentos. Configure também as chaves do Google Maps para frete e mapa.
 
 ## Verificação
 
@@ -87,7 +88,7 @@ Referências: [Google Routes](https://developers.google.com/maps/documentation/r
 4. O cliente acessa **Meus pedidos → Acompanhar entrega por GPS**. A consulta exige login e acesso ao próprio pedido. O mapa identifica a última atualização e avisa após 2 minutos sem posição recente.
 5. **Parar e encerrar link** revoga o acesso e remove a posição. Concluir ou cancelar a entrega também remove a posição e revoga o link. A expiração impede publicação e consulta, mesmo que o pedido ainda esteja em entrega. Fechar a página interrompe novos envios, mas não equivale a concluir a entrega; o cliente verá o aviso de posição desatualizada.
 
-GPS não calcula prazo de chegada e não funciona como rastreador nativo em segundo plano. Não há histórico de percurso. A posição é exibida em OpenStreetMap, com atalho para Google Maps. A API Routes é usada apenas para cotar frete.
+GPS não calcula prazo de chegada e não funciona como rastreador nativo em segundo plano. Não há histórico de percurso. A posição é exibida em Google Maps e exige GOOGLE_MAPS_BROWSER_API_KEY restrita ao domínio. A API Routes é usada apenas para cotar frete.
 
 ### Testes de integração locais
 

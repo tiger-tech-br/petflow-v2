@@ -1,5 +1,7 @@
 # Revisão do PetFlow v2 — 30/09/2026
 
+> Documento histórico. As pendências abaixo refletem aquela revisão e algumas já foram corrigidas. Para instalação, critérios atuais e limites operacionais, consulte `docs/entrega-comercial.md` e `docs/revisao-comercial-2026-10-09.md`.
+
 > Atualização posterior: o usuário confirmou que o PagBank já funciona. Foram implementados frete por rota Google Maps (1 km grátis; R$ 3 por km adicional ou fração), endereço congelado no pedido, cobrança do frete no PagBank e GPS opcional do entregador. A pendência de frete abaixo descreve a revisão inicial e foi substituída por essa implementação. Permanecem necessários configurar GOOGLE_MAPS_API_KEY e publicar o código; consulte README.MD. A suíte ampliada passou em 14 testes com PostgreSQL isolado e provedores simulados.
 
 ## Resultado e limites

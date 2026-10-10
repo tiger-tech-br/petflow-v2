@@ -3,6 +3,10 @@ const app = require("./app");
 const { PORT } = require("./config/env");
 const { assertEmailConfigured } = require("./services/emailService");
 const VendaService = require("./services/vendaService");
+const { isCloudinaryConfigured } = require("./config/cloudinary");
+if (!isCloudinaryConfigured()) {
+    console.warn("[cloudinary] Upload de fotos e logo indisponível: configure CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY e CLOUDINARY_API_SECRET.");
+}
 if (!process.env.GOOGLE_MAPS_API_KEY?.trim() && !process.env.GOOGLE_API_KEY?.trim()) {
     console.warn("[frete] Configure GOOGLE_MAPS_API_KEY ou GOOGLE_API_KEY com Routes API habilitada para liberar novas compras com entrega.");
 }
