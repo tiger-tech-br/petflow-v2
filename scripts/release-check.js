@@ -4,7 +4,7 @@ const { REQUIRED_MIGRATIONS, productionConfigurationChecks } = require("../confi
 
 async function runReleaseChecks(db, env = process.env, options = {}) {
     const checks = productionConfigurationChecks(env, options);
-    const check = (name, passed, detail) => checks.push({ name, passed: Boolean(passed), detail });
+    const check = (name, passed, detail, integration = "database") => checks.push({ name, passed: Boolean(passed), detail, integration });
     try {
         const { rows: tables } = await db.query(`
             SELECT to_regclass('public.schema_migrations') IS NOT NULL AS migrations,
@@ -47,11 +47,11 @@ async function runReleaseChecks(db, env = process.env, options = {}) {
                WHERE COALESCE(p.status,p.ativo,TRUE)=TRUE AND p.preco>0 AND e.quantidade>0) AS vendaveis
         `);
         const store = catalog[0];
-        check("Empresa da loja cadastrada", store.empresas > 0, `${store.empresas} registro(s)`);
-        check("Administrador da loja ativo", store.admins > 0, `${store.admins} administrador(es)`);
-        check("Catalogo da loja ativo", store.produtos > 0, `${store.produtos} produto(s)`);
-        check("Estoque da loja cadastrado", store.produtos > 0 && store.estoques === store.produtos, `${store.estoques}/${store.produtos} produto(s) com estoque`);
-        check("Produtos disponiveis para venda", store.vendaveis > 0, `${store.vendaveis} produto(s) com preco e saldo positivos`);
+        check("Empresa da loja cadastrada", store.empresas > 0, `${store.empresas} registro(s)`, "loja");
+        check("Administrador da loja ativo", store.admins > 0, `${store.admins} administrador(es)`, "loja");
+        check("Catalogo da loja ativo", store.produtos > 0, `${store.produtos} produto(s)`, "loja");
+        check("Estoque da loja cadastrado", store.produtos > 0 && store.estoques === store.produtos, `${store.estoques}/${store.produtos} produto(s) com estoque`, "loja");
+        check("Produtos disponiveis para venda", store.vendaveis > 0, `${store.vendaveis} produto(s) com preco e saldo positivos`, "loja");
 
         const { rows: legal } = await db.query(`
             SELECT ARRAY_REMOVE(ARRAY[
@@ -69,7 +69,7 @@ async function runReleaseChecks(db, env = process.env, options = {}) {
         `);
         const missing = legal[0]?.pendentes;
         check("Dados publicos da loja", Array.isArray(missing) && missing.length === 0,
-            Array.isArray(missing) ? (missing.length ? `pendente: ${missing.join(", ")}` : "identificacao, contato e endereco preenchidos") : "empresa da loja ausente");
+            Array.isArray(missing) ? (missing.length ? `pendente: ${missing.join(", ")}` : "identificacao, contato e endereco preenchidos") : "empresa da loja ausente", "loja");
     } catch (error) {
         check("Consulta PostgreSQL", false, /^[A-Z0-9_]+$/.test(error.code || "") ? error.code : "nao foi possivel verificar o banco");
     }

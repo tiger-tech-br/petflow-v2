@@ -4,7 +4,8 @@ const REQUIRED_MIGRATIONS = [
     "110_admin_profissional.sql",
     "111_lgpd.sql",
     "112_atendimento_consumidor.sql",
-    "113_cloudinary_assets.sql"
+    "113_cloudinary_assets.sql",
+    "114_atendimento_notificacoes.sql"
 ];
 
 function configuredValue(value) {

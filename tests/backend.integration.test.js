@@ -183,6 +183,22 @@ test("cadastro, confirmação, compra, webhook e estoque em PostgreSQL isolado",
         const supportList = await request("/api/atendimento", "GET", null, adminToken);
         assert.equal(supportList.status, 200);
         assert.equal(supportList.body.data[0].protocolo, supportRequest.body.data.protocolo);
+        const supportItem = supportList.body.data[0];
+        const supportPath = `/api/atendimento/${supportItem.id}`;
+        assert.equal((await request(supportPath, "PUT", { status: "EM_ANALISE" }, token)).status, 403);
+        const supportAnalysis = await request(supportPath, "PUT", { status: "EM_ANALISE" }, adminToken);
+        assert.equal(supportAnalysis.status, 200, JSON.stringify(supportAnalysis.body));
+        assert.equal(supportAnalysis.body.data.atendida_em, null);
+        assert.equal(supportAnalysis.body.data.atendida_por, null);
+        const noticeCountBeforeAnswer = (await pool.query("SELECT COUNT(*)::int AS n FROM notificacoes WHERE tipo='ATENDIMENTO'")).rows[0].n;
+        const supportAnswer = { status: "ATENDIDA", resposta: "Pedido cancelado e reserva de estoque liberada." };
+        const supportAnswered = await request(supportPath, "PUT", supportAnswer, adminToken);
+        assert.equal(supportAnswered.status, 200, JSON.stringify(supportAnswered.body));
+        assert.equal(supportAnswered.body.data.atendida_por, adminId);
+        assert.ok(supportAnswered.body.data.atendida_em);
+        assert.equal((await request(supportPath, "PUT", supportAnswer, adminToken)).status, 200);
+        assert.equal((await pool.query("SELECT COUNT(*)::int AS n FROM notificacoes WHERE tipo='ATENDIMENTO'")).rows[0].n,
+            noticeCountBeforeAnswer + 1, "Repetir a mesma resposta não duplica o aviso ao consumidor");
         const exported = await request("/api/public/clientes/me/dados", "GET", null, token);
         assert.equal(exported.status, 200);
         assert.equal(exported.body.consentimentos.length, 1, "Exportacao inclui o aceite LGPD");
@@ -193,15 +209,25 @@ test("cadastro, confirmação, compra, webhook e estoque em PostgreSQL isolado",
         assert.equal(privacyList.status, 200);
         const privacyItem = privacyList.body.data.find(item => item.protocolo === privacyRequest.body.data.protocolo);
         assert.ok(privacyItem, "Solicitacao LGPD aparece no painel administrativo");
-        assert.equal((await request(`/api/lgpd/${privacyItem.id}`, "PUT",
-            { status: "ATENDIDA", resposta: "Relacao de operadores disponibilizada ao titular." }, adminToken)).status, 200);
+        const privacyPath = `/api/lgpd/${privacyItem.id}`;
+        assert.equal((await request(privacyPath, "PUT", { status: "EM_ANALISE" }, token)).status, 403);
+        const privacyAnalysis = await request(privacyPath, "PUT", { status: "EM_ANALISE" }, adminToken);
+        assert.equal(privacyAnalysis.status, 200, JSON.stringify(privacyAnalysis.body));
+        assert.equal(privacyAnalysis.body.data.atendida_em, null);
+        assert.equal(privacyAnalysis.body.data.atendida_por, null);
+        const privacyAnswered = await request(privacyPath, "PUT",
+            { status: "ATENDIDA", resposta: "Relacao de operadores disponibilizada ao titular." }, adminToken);
+        assert.equal(privacyAnswered.status, 200, JSON.stringify(privacyAnswered.body));
+        assert.equal(privacyAnswered.body.data.atendida_por, adminId);
+        assert.ok(privacyAnswered.body.data.atendida_em);
         const noticesPath = "/api/dashboard/notificacoes";
         assert.equal((await request(noticesPath)).status, 401);
         assert.equal((await request(noticesPath, "GET", null, token)).status, 403);
         const notices = (await request(noticesPath, "GET", null, adminToken)).body.data;
         assert.equal(notices.filter(n => n.titulo === "Novo cliente cadastrado").length, 1, "Novo cadastro gera aviso persistente");
         assert.equal(notices.filter(n => n.titulo === "Nova solicitação LGPD").length, 1, "Solicitacao LGPD gera aviso persistente");
-        assert.equal(notices.filter(n => n.venda_id).length, 2, "Preserva avisos de novos pedidos");
+        assert.equal(notices.filter(n => n.titulo === "Novo pedido recebido").length, 2, "Preserva avisos de novos pedidos");
+        assert.equal(notices.filter(n => n.titulo === "Nova solicitação de atendimento").length, 1, "Preserva aviso do atendimento vinculado ao pedido");
         assert.ok(notices.every(n => !n.lida));
         assert.equal((await request(noticesPath + "/lidas", "PATCH", { ids: [notices[0].id] }, adminToken)).status, 200);
         assert.equal((await request(noticesPath, "GET", null, adminToken)).body.data.filter(n => n.lida).length, 1, "Leitura persiste ao consultar novamente");
@@ -214,7 +240,11 @@ test("cadastro, confirmação, compra, webhook e estoque em PostgreSQL isolado",
         const linkEndpoint = `/api/vendas/${order}/rastreamento`;
         assert.equal((await request(linkEndpoint)).status,401);
         assert.equal((await request(linkEndpoint,"GET",null,token)).status,403,"Cliente não tem acesso ao acompanhamento administrativo");
-        assert.equal((await request(linkEndpoint,"GET",null,otherStore)).status,404,"Outra loja não acessa o GPS");
+        assert.equal((await request(linkEndpoint,"GET",null,otherStore)).status,401,"Sessão com empresa adulterada é recusada");
+        const foreignStoreId = (await pool.query("INSERT INTO empresas(nome) VALUES ('Outra loja isolada') RETURNING id")).rows[0].id;
+        const foreignAdminId = (await pool.query("INSERT INTO usuarios(nome,email,senha_hash,perfil,empresa_id) VALUES ('Outra loja','foreign@example.invalid','test','ADMIN',$1) RETURNING id", [foreignStoreId])).rows[0].id;
+        const foreignAdminToken = jwt.sign({ id: foreignAdminId, empresaId: foreignStoreId, cargo: "ADMIN", sv: 1 }, process.env.JWT_SECRET);
+        assert.equal((await request(linkEndpoint,"GET",null,foreignAdminToken)).status,404,"Administrador autenticado de outra loja não acessa o GPS");
         assert.equal((await request("/api/vendas/invalid/rastreamento","GET",null,adminToken)).status,400);
         assert.equal((await request(`/api/vendas/${crypto.randomUUID()}/rastreamento`,"GET",null,adminToken)).status,404);
         assert.equal((await request(linkEndpoint, "POST", {}, adminToken)).status, 409, "GPS só disponível em entrega");
@@ -315,6 +345,36 @@ test("cadastro, confirmação, compra, webhook e estoque em PostgreSQL isolado",
         const results = await Promise.allSettled([stock.saida(empresaId, product, 5), stock.saida(empresaId, product, 5)]);
         assert.equal(results.filter(x => x.status === "fulfilled").length,1);
         assert.equal(Number((await pool.query("SELECT quantidade FROM estoque WHERE produto_id=$1",[product])).rows[0].quantidade),3);
+        const saleService = require("../services/vendaService");
+        const customerId = (await pool.query("SELECT id FROM clientes WHERE email=$1", [customer.email])).rows[0].id;
+        const refundable = await saleService.finalizarVenda(empresaId,
+            { cliente_id: customerId, formaPagamento: "PAGBANK" }, [{ produtoId: product, quantidade: 1 }]);
+        await saleService.confirmarPagamento(empresaId, refundable.venda.id,
+            { pagseguroStatus: "PAID", pagseguroChargeId: "CHAR_CANCEL_TEST" });
+        const originalRefund = pagbank.cancelarCobranca;
+        let refundCalls = 0;
+        try {
+            pagbank.cancelarCobranca = async () => { throw Object.assign(new Error("Estorno indisponível"), { status: 503 }); };
+            await assert.rejects(saleService.cancelarPedido(empresaId, refundable.venda.id), { status: 503 });
+            assert.equal((await pool.query("SELECT status FROM vendas WHERE id=$1", [refundable.venda.id])).rows[0].status,
+                "PAGAMENTO_APROVADO", "Falha no estorno mantém pedido pago para nova tentativa");
+            assert.equal(Number((await pool.query("SELECT quantidade FROM estoque WHERE produto_id=$1", [product])).rows[0].quantidade), 2);
+            pagbank.cancelarCobranca = async (charge, total) => {
+                assert.equal(charge, "CHAR_CANCEL_TEST");
+                assert.equal(Number(total), 12.5);
+                refundCalls++;
+                return { id: charge, status: "CANCELED" };
+            };
+            const cancellations = await Promise.all([1, 2].map(() => saleService.cancelarPedido(empresaId, refundable.venda.id)));
+            assert.ok(cancellations.every(item => item.status === "CANCELADA"));
+            assert.equal(refundCalls, 1, "Cancelamentos simultâneos não repetem o estorno");
+            assert.equal(Number((await pool.query("SELECT quantidade FROM estoque WHERE produto_id=$1", [product])).rows[0].quantidade), 3,
+                "Cancelamentos simultâneos devolvem o estoque uma única vez");
+            assert.equal((await pool.query("SELECT reembolso_status FROM vendas WHERE id=$1", [refundable.venda.id])).rows[0].reembolso_status,
+                "PROCESSADO");
+        } finally {
+            pagbank.cancelarCobranca = originalRefund;
+        }
         console.log("Fluxo completo aprovado com PostgreSQL real e provedores simulados.");
     } finally {
         global.fetch = originalFetch;

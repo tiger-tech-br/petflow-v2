@@ -515,27 +515,7 @@ const VendaService = {
     },
 
     async cancelarPedido(empresaId, vendaId, options = {}) {
-        const preview = await VendaModel.buscarPorId(vendaId, empresaId);
-        if (!preview) return null;
-        if (preview.status === "CANCELADA") return preview;
-        if (["ENTREGUE", "FINALIZADA"].includes(preview.status)) {
-            throw Object.assign(new Error("Pedido entregue deve seguir um processo de devolução, não cancelamento."), { status: 409 });
-        }
-
         const motivo = String(options.motivo || "Cancelado pelo administrador").trim().slice(0, 500);
-        const pago = ["PAGAMENTO_APROVADO", "EM_SEPARACAO", "SAIU_PARA_ENTREGA"].includes(preview.status);
-        let reembolso = null;
-        if (pago && !options.skipRefund) {
-            if (!preview.pagseguro_charge_id) {
-                throw Object.assign(new Error("O pedido pago não possui identificador da cobrança. Faça o estorno no PagBank e registre o cancelamento depois."), { status: 409 });
-            }
-            reembolso = await PagSeguroService.cancelarCobranca(
-                preview.pagseguro_charge_id,
-                preview.valor_final,
-                `cancel-${preview.id}`
-            );
-        }
-
         const result = await db.transaction(async client => {
             const { rows } = await client.query(
                 "SELECT * FROM vendas WHERE id=$1 AND empresa_id=$2 FOR UPDATE",
@@ -546,6 +526,20 @@ const VendaService = {
             if (current.status === "CANCELADA") return { sale: current, changed: false };
             if (["ENTREGUE", "FINALIZADA"].includes(current.status)) {
                 throw Object.assign(new Error("Pedido entregue não pode ser cancelado."), { status: 409 });
+            }
+
+            // Revalida o pagamento com o pedido bloqueado, inclusive em cancelamentos simultâneos.
+            const pago = ["PAGAMENTO_APROVADO", "EM_SEPARACAO", "SAIU_PARA_ENTREGA"].includes(current.status);
+            let reembolso = null;
+            if (pago && !options.skipRefund) {
+                if (!current.pagseguro_charge_id) {
+                    throw Object.assign(new Error("O pedido pago não possui identificador da cobrança. Faça o estorno no PagBank e registre o cancelamento depois."), { status: 409 });
+                }
+                reembolso = await PagSeguroService.cancelarCobranca(
+                    current.pagseguro_charge_id,
+                    current.valor_final,
+                    `cancel-${current.id}`
+                );
             }
 
             if (current.estoque_baixado_em && !current.estoque_devolvido_em) {

@@ -2,6 +2,8 @@
 
 (function setupPetFlowPublicHeader() {
     const HEADER_VERSION = "20260811-1";
+    const DEFAULT_LOGO = "/images/logo/fred-petflow-logo-transparent.png";
+    let storeInfoRequest;
 
     document.addEventListener("DOMContentLoaded", initPublicHeader);
 
@@ -16,6 +18,46 @@
         setupHeaderSearch();
         setupMenuToggle();
         updateHeaderState();
+        return loadStoreBrand();
+    }
+
+    async function loadStoreBrand() {
+        if (!storeInfoRequest) {
+            storeInfoRequest = fetch("/api/public/loja")
+                .then(async response => {
+                    if (!response.ok) return {};
+                    const payload = await response.json();
+                    return payload.success !== false && payload.data && typeof payload.data === "object"
+                        ? payload.data : {};
+                })
+                .catch(() => ({}));
+        }
+
+        const store = await storeInfoRequest;
+        const name = typeof store.nome === "string" && store.nome.trim() ? store.nome.trim() : "PetFlow";
+        const label = document.querySelector(".public-header .logo-text");
+        const logo = document.querySelector(".public-header .logo img");
+        if (label) label.textContent = name;
+        if (logo) {
+            logo.alt = `Logo de ${name}`;
+            logo.onerror = () => {
+                logo.onerror = null;
+                logo.src = DEFAULT_LOGO;
+            };
+            logo.src = safeStoreLogo(store.logo);
+        }
+    }
+
+    function safeStoreLogo(value) {
+        if (typeof value !== "string" || !value.trim()) return DEFAULT_LOGO;
+        try {
+            const url = new URL(value.trim(), window.location.href);
+            const allowed = url.protocol === "https:" ||
+                (url.protocol === "http:" && url.origin === window.location.origin);
+            return allowed && !url.username && !url.password ? url.href : DEFAULT_LOGO;
+        } catch {
+            return DEFAULT_LOGO;
+        }
     }
 
     function ensureHeader() {

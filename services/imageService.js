@@ -23,15 +23,20 @@ async function uploadImage(file) {
         throw Object.assign(new Error("O arquivo de imagem está vazio."), { status: 400 });
     }
     assertCloudinaryConfigured();
+    const requestedId = randomUUID();
+    const expectedPublicId = `${folder}/${requestedId}`;
     return new Promise((resolve, reject) => {
         try {
             const stream = cloudinary.uploader.upload_stream({
-                folder, public_id: randomUUID(), overwrite: false,
+                folder, public_id: requestedId, overwrite: false,
                 resource_type: "image", allowed_formats: ["jpg", "jpeg", "png", "webp"],
                 timeout: 60000
-            }, (error, result) => {
+            }, async (error, result) => {
                 if (error) return reject(imageError(error));
-                if (!ownedPublicId(result?.public_id) || !getImagePublicId(result?.secure_url, result.public_id)) {
+                if (result?.public_id !== expectedPublicId || !getImagePublicId(result?.secure_url, expectedPublicId)) {
+                    // Uma resposta incompleta pode ter criado o arquivo. Só limpamos o ID
+                    // aleatório deste pedido, nunca um asset inesperado retornado pelo SDK.
+                    if (result?.public_id === expectedPublicId) await removeImageSafely(expectedPublicId);
                     return reject(imageError());
                 }
                 resolve({ url: result.secure_url, publicId: result.public_id });
@@ -46,6 +51,10 @@ async function uploadImage(file) {
 // URLs antigas só podem ser removidas se forem originais desta conta e desta pasta.
 function getImagePublicId(imageUrl, storedPublicId) {
     try {
+        // URL normaliza segmentos ".." antes da inspeção; recusamos a entrada
+        // original para que um caminho alterado não autorize a limpeza de outro asset.
+        if (typeof imageUrl !== "string" || imageUrl.includes("\\") ||
+            /(?:\/|%2f)(?:\.|%2e){1,2}(?=\/|%2f|[?#]|$)/i.test(imageUrl)) return null;
         const url = new URL(imageUrl);
         if (url.protocol !== "https:" || url.hostname !== "res.cloudinary.com" || url.port || url.username || url.password) return null;
         const cloudName = cloudinary.config().cloud_name;

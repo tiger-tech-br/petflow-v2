@@ -37,7 +37,7 @@ Os seeds de catálogo e clientes são ferramentas de demonstração. Não carreg
 | Google Maps | Chave privada com Routes API; chave pública de Maps JavaScript restrita ao domínio | Cotação do frete e mapa de entrega por HTTPS |
 | PostgreSQL | Banco separado, nome esperado e migrações aplicadas | `npm run release:check` e backup/restauração em instância de ensaio |
 
-Em produção, defina `NODE_ENV=production`, `APP_URL` e `FRONTEND_URL` com a origem HTTPS real. Aplique todas as migrações, incluindo `113_cloudinary_assets.sql`, antes de iniciar esta versão. No Railway, o pre-deploy já executa o migrador.
+Em produção, defina `NODE_ENV=production`, `APP_URL` e `FRONTEND_URL` com a origem HTTPS real. Aplique todas as migrações, incluindo `113_cloudinary_assets.sql` e `114_atendimento_notificacoes.sql`, antes de iniciar esta versão. No Railway, o pre-deploy já executa o migrador.
 
 Configure `DELIVERY_ORIGIN_ADDRESS` para o endereço da loja. A regra atual de frete usa a rota de carro: até 1 km grátis; acima disso, R$ 3 por quilômetro adicional ou fração. O comprador precisa aceitar essa regra ou contratar sua alteração antes da operação.
 
@@ -52,7 +52,7 @@ Hospedagem, domínio, consumo dos provedores e taxas de pagamento precisam ser m
 3. No ambiente definitivo, execute `npm run release:check`. A configuração local em `development` não deve ser aprovada como produção.
 4. Execute o teste real do Cloudinary, cadastre e substitua uma foto de produto e um logo no painel. Confirme a imagem na loja e a preservação do arquivo atual quando uma edição falhar.
 5. Execute os testes de compra, entrega e atendimento de `docs/entrega-producao.md`. Pagamentos e estornos reais devem ser conferidos pelo responsável da conta PagBank.
-6. Confira `/api/health` e `/api/readiness`. Readiness verifica configuração e migrações; não autentica provedores nem comprova entrega de e-mail ou pagamento real.
+6. Confira `/api/health` e `/api/readiness`. Readiness verifica configuração, migrações, dados da loja e catálogo; não autentica provedores nem comprova entrega de e-mail ou pagamento real.
 7. Guarde um backup fora da aplicação e ensaie restauração em outro banco antes da entrega definitiva.
 
 ## Limites operacionais

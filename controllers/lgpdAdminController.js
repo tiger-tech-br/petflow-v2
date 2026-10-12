@@ -33,9 +33,9 @@ async function atualizar(req, res, next) {
             );
             if (!previous.rows[0]) return null;
             const { rows } = await client.query(
-                `UPDATE lgpd_solicitacoes SET status=$1,resposta=$2,
-                 atendida_em=CASE WHEN $1 IN ('ATENDIDA','NEGADA') THEN NOW() ELSE NULL END,
-                 atendida_por=CASE WHEN $1 IN ('ATENDIDA','NEGADA') THEN $3 ELSE NULL END,
+                `UPDATE lgpd_solicitacoes SET status=$1::varchar,resposta=$2,
+                 atendida_em=CASE WHEN $1::varchar IN ('ATENDIDA','NEGADA') THEN NOW() ELSE NULL END,
+                 atendida_por=CASE WHEN $1::varchar IN ('ATENDIDA','NEGADA') THEN $3::uuid ELSE NULL END,
                  updated_at=NOW() WHERE id=$4 AND empresa_id=$5 RETURNING *`,
                 [status, String(req.body?.resposta || "").trim() || null, req.user.id,
                     req.params.id, req.user.empresaId]

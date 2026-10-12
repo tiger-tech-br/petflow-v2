@@ -3,7 +3,8 @@
 const router = require("express").Router();
 const db = require("../database/connection");
 const { isCloudinaryConfigured } = require("../config/cloudinary");
-const { REQUIRED_MIGRATIONS, productionConfigurationChecks, configurationStatus } = require("../config/productionReadiness");
+const { configurationStatus } = require("../config/productionReadiness");
+const { runReleaseChecks } = require("../scripts/release-check");
 
 router.get("/health", async (_request, response) => {
     try {
@@ -28,18 +29,19 @@ router.get("/health", async (_request, response) => {
 });
 
 router.get("/readiness", async (_request, response) => {
-    const checks = productionConfigurationChecks(process.env, { cloudinaryConfigured: isCloudinaryConfigured() });
-    const integrations = configurationStatus(checks);
-    const configurationReady = Object.values(integrations).every(Boolean);
     try {
-        const { rows } = await db.query("SELECT nome FROM schema_migrations WHERE nome = ANY($1::text[])", [REQUIRED_MIGRATIONS]);
-        const applied = new Set(rows.map(row => row.nome));
-        const databaseReady = REQUIRED_MIGRATIONS.every(name => applied.has(name));
-        const ready = configurationReady && databaseReady;
+        const checks = await runReleaseChecks(db, process.env, { cloudinaryConfigured: isCloudinaryConfigured() });
+        const integrations = configurationStatus(checks);
+        const databaseChecks = checks.filter(check => check.integration === "database");
+        const storeChecks = checks.filter(check => check.integration === "loja");
+        const databaseReady = databaseChecks.length > 0 && databaseChecks.every(check => check.passed);
+        const storeReady = storeChecks.length === 6 && storeChecks.every(check => check.passed);
+        const ready = checks.every(check => check.passed) && storeReady;
         return response.status(ready ? 200 : 503).json({
             success: ready,
-            status: ready ? "ready" : "attention_required",
+            status: !databaseReady ? "database_unavailable" : ready ? "ready" : "attention_required",
             database: databaseReady,
+            store: storeReady,
             integrations,
             timestamp: new Date().toISOString()
         });
@@ -48,7 +50,7 @@ router.get("/readiness", async (_request, response) => {
             success: false,
             status: "database_unavailable",
             database: false,
-            integrations,
+            store: false,
             timestamp: new Date().toISOString()
         });
     }

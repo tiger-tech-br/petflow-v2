@@ -22,7 +22,10 @@ async function loadStoreInfo() {
     try {
         const response = await fetch(`${PUBLIC_API}/loja`);
         if (!response.ok) return;
-        const { data = {} } = await response.json();
+        const payload = await response.json();
+        if (payload.success === false || !payload.data || typeof payload.data !== "object") return;
+        const data = payload.data;
+        updateStoreBrand(data);
         const address = [data.endereco, data.numero, data.complemento, data.bairro,
             data.cidade, data.estado, data.cep].filter(Boolean).join(", ");
         document.querySelectorAll("[data-store-name]").forEach(item => { item.textContent = data.nome || "PetFlow"; });
@@ -33,6 +36,33 @@ async function loadStoreInfo() {
     } catch {
         // O rodape permanece sem inventar dados quando a configuracao nao puder ser carregada.
     }
+}
+
+function updateStoreBrand(store) {
+    const defaultLogo = "/images/logo/fred-petflow-logo-transparent.png";
+    const name = typeof store.nome === "string" && store.nome.trim() ? store.nome.trim() : "PetFlow";
+    const label = document.querySelector(".header .logo-text");
+    const logo = document.querySelector(".header .logo img");
+    if (label) label.textContent = name;
+    if (!logo) return;
+
+    let source = defaultLogo;
+    if (typeof store.logo === "string" && store.logo.trim()) {
+        try {
+            const url = new URL(store.logo.trim(), window.location.href);
+            const allowed = url.protocol === "https:" ||
+                (url.protocol === "http:" && url.origin === window.location.origin);
+            if (allowed && !url.username && !url.password) source = url.href;
+        } catch {
+            // Mantém o logo local quando a configuração não é uma URL válida.
+        }
+    }
+    logo.alt = `Logo de ${name}`;
+    logo.onerror = () => {
+        logo.onerror = null;
+        logo.src = defaultLogo;
+    };
+    logo.src = source;
 }
 
 async function loadPublicCatalog() {

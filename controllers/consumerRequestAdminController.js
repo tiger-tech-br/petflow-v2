@@ -55,16 +55,18 @@ async function atualizar(req, res, next) {
             );
             if (!locked.rows[0]) return null;
             const { rows } = await client.query(
-                `UPDATE solicitacoes_consumidor SET status=$1,resposta=$2,
-                 atendida_em=CASE WHEN $1 IN ('ATENDIDA','NEGADA') THEN NOW() ELSE NULL END,
-                 atendida_por=CASE WHEN $1 IN ('ATENDIDA','NEGADA') THEN $3 ELSE NULL END,
+                `UPDATE solicitacoes_consumidor SET status=$1::varchar,resposta=$2,
+                 atendida_em=CASE WHEN $1::varchar IN ('ATENDIDA','NEGADA') THEN NOW() ELSE NULL END,
+                 atendida_por=CASE WHEN $1::varchar IN ('ATENDIDA','NEGADA') THEN $3::uuid ELSE NULL END,
                  updated_at=NOW() WHERE id=$4 AND empresa_id=$5 RETURNING *`,
                 [status, resposta || null, req.user.id, req.params.id, req.user.empresaId]
             );
             await audit.registrar({ ...audit.requestMeta(req), acao: "ATENDER", entidade: "ATENDIMENTO",
                 entidadeId: req.params.id, descricao: `Solicitação ${locked.rows[0].protocolo}: ${status}.`,
                 anterior: locked.rows[0], novo: rows[0] }, client);
-            if (["ATENDIDA", "NEGADA"].includes(status) && rows[0].cliente_id) {
+            const notify = ["ATENDIDA", "NEGADA"].includes(status) &&
+                (locked.rows[0].status !== status || locked.rows[0].resposta !== rows[0].resposta);
+            if (notify && rows[0].cliente_id) {
                 await client.query(
                     `INSERT INTO notificacoes (cliente_id,venda_id,titulo,mensagem,tipo)
                      VALUES ($1,$2,$3,$4,'ATENDIMENTO')`,
@@ -73,8 +75,7 @@ async function atualizar(req, res, next) {
                         `Protocolo ${rows[0].protocolo}: ${resposta}`]
                 );
             }
-            return { item: rows[0], notify: ["ATENDIDA", "NEGADA"].includes(status) &&
-                (locked.rows[0].status !== status || locked.rows[0].resposta !== rows[0].resposta) };
+            return { item: rows[0], notify };
         });
         if (!result) return res.status(404).json({ success: false, message: "Solicitação não encontrada." });
         if (result.notify && result.item.email_referencia) {

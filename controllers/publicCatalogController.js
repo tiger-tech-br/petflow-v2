@@ -57,7 +57,7 @@ async function categorias(request, response, next) {
 async function loja(request, response, next) {
     try {
         const { rows } = await db.query(`
-            SELECT nome,razao_social,cnpj,telefone,email,endereco,numero,complemento,
+            SELECT nome,logo,razao_social,cnpj,telefone,email,endereco,numero,complemento,
                    bairro,cidade,estado,cep,horario_abertura,horario_fechamento
             FROM empresas WHERE id=get_petflow_empresa_id() LIMIT 1
         `);
